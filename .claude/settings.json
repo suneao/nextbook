@@ -1,0 +1,19 @@
+{
+  "project": "NextBook",
+  "description": "Cross-platform desktop study app using Next.js + Tauri + shadcn/ui + AI Elements",
+  "language": "TypeScript",
+  "rules": [
+    ".claude/rules/nextjs.md",
+    ".claude/rules/tauri.md",
+    ".claude/rules/shadcn-ui.md",
+    ".claude/rules/ai-elements.md",
+    ".claude/rules/tailwind-v4.md",
+    ".claude/rules/project-conventions.md"
+  ],
+  "docs": {
+    "nextjs": "node_modules/next/dist/docs/index.md",
+    "shadcn_ui": "https://ui.shadcn.com/docs",
+    "ai_elements": "https://elements.ai-sdk.dev",
+    "tauri": "https://v2.tauri.app"
+  }
+}
