@@ -1,0 +1,66 @@
+[
+  {
+    "label": "dev (web)",
+    "command": "pnpm dev",
+    "cwd": "$ZED_DIRNAME",
+    "use_new_terminal": true,
+    "allow_concurrent_runs": false,
+    "reveal": "always"
+  },
+  {
+    "label": "dev (desktop)",
+    "command": "pnpm tauri:dev",
+    "cwd": "$ZED_DIRNAME",
+    "use_new_terminal": true,
+    "allow_concurrent_runs": false,
+    "reveal": "always"
+  },
+  {
+    "label": "build (web)",
+    "command": "pnpm build",
+    "cwd": "$ZED_DIRNAME",
+    "use_new_terminal": true,
+    "allow_concurrent_runs": false,
+    "reveal": "always"
+  },
+  {
+    "label": "build (desktop)",
+    "command": "pnpm tauri:build",
+    "cwd": "$ZED_DIRNAME",
+    "use_new_terminal": true,
+    "allow_concurrent_runs": false,
+    "reveal": "always"
+  },
+  {
+    "label": "typecheck",
+    "command": "pnpm exec tsc --noEmit",
+    "cwd": "$ZED_DIRNAME",
+    "use_new_terminal": true,
+    "allow_concurrent_runs": true,
+    "reveal": "always"
+  },
+  {
+    "label": "lint",
+    "command": "pnpm lint",
+    "cwd": "$ZED_DIRNAME",
+    "use_new_terminal": true,
+    "allow_concurrent_runs": true,
+    "reveal": "always"
+  },
+  {
+    "label": "tauri dev (no frontend)",
+    "command": "cargo tauri dev --no-dev-server",
+    "cwd": "$ZED_DIRNAME/src-tauri",
+    "use_new_terminal": true,
+    "allow_concurrent_runs": true,
+    "reveal": "always"
+  },
+  {
+    "label": "clean & rebuild",
+    "command": "rm -rf out .next src-tauri/target && pnpm build && cargo build --manifest-path src-tauri/Cargo.toml --release",
+    "cwd": "$ZED_DIRNAME",
+    "use_new_terminal": true,
+    "allow_concurrent_runs": false,
+    "reveal": "always"
+  }
+]
