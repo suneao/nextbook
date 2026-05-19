@@ -27,8 +27,8 @@ import {
   Loader2,
   Plus,
   Pencil,
-  Check,
   RotateCw,
+  Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -49,16 +49,15 @@ import {
   CollapsibleTrigger,
   CollapsibleContent,
 } from "@/components/ui/collapsible";
-import {
-  Accordion,
-  AccordionItem,
-  AccordionTrigger,
-  AccordionContent,
-} from "@/components/ui/accordion";
+import {} from "@/components/ui/accordion";
 import { AIChatPanel } from "@/components/ai-chat-panel";
 import { Markdown } from "@/components/markdown";
 import { extractTextFromPDF } from "@/lib/pdf-service";
-import { analyzeChapters, extractKnowledgePoints } from "@/lib/chapter-ai";
+import {
+  analyzeChapters,
+  extractKnowledgePoints,
+  regenerateSubChapter,
+} from "@/lib/chapter-ai";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { getModelConfig } from "@/lib/ai-service";
@@ -105,10 +104,37 @@ export default function ProjectDetailClient() {
     string | null
   >(null);
   const [chatOpen, setChatOpen] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarWidth, setSidebarWidth] = useState(280);
+  const sidebarRef = useRef<HTMLDivElement>(null);
+  const [dragging, setDragging] = useState(false);
+  const dragStart = useRef({ mx: 0, w: 280 });
   const [loaded, setLoaded] = useState(false);
+  // Sidebar resize via drag
+  useEffect(() => {
+    if (!dragging) return;
+    const handleMouseMove = (e: MouseEvent) => {
+      const delta = e.clientX - dragStart.current.mx;
+      const w = Math.max(200, Math.min(500, dragStart.current.w + delta));
+      setSidebarWidth(w);
+    };
+    const handleMouseUp = () => setDragging(false);
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [dragging]);
+
+  const toggleSidebar = () => {
+    setSidebarWidth((w) => (w === 0 ? 280 : 0));
+  };
   const [uploading, setUploading] = useState(false);
+  const [regenScId, setRegenScId] = useState(null);
+  const [regenInstructions, setRegenInstructions] = useState("");
+  const [regenLoading, setRegenLoading] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisStatus, setAnalysisStatus] = useState("");
   const [addingChapter, setAddingChapter] = useState(false);
@@ -147,6 +173,68 @@ export default function ProjectDetailClient() {
       saveProjects(allProjects);
     }
   }, []);
+  const handleRegenerateSubChapter = useCallback(
+    async (scId: string) => {
+      if (!project || project.textbooks.length === 0) return;
+      const modelId = (() => {
+        try {
+          return (
+            JSON.parse(localStorage.getItem("nextbook-settings") || "{}")
+              .chapterModel || "gpt-4o"
+          );
+        } catch {
+          return "gpt-4o";
+        }
+      })();
+      const model = getModelConfig(modelId);
+      if (!model?.apiKey) {
+        alert("请先配置API Key");
+        return;
+      }
+      const tb = project.textbooks[0];
+      if (!tb.fileData) {
+        alert("PDF数据未找到");
+        return;
+      }
+      setRegenLoading(true);
+      try {
+        const sc = project.chapters
+          .flatMap((ch) => ch.subChapters)
+          .find((s) => s.id === scId);
+        if (!sc) return;
+        const pdfText = await extractTextFromPDF(tb.fileData);
+        const knowledge = await regenerateSubChapter(
+          pdfText,
+          sc.title,
+          modelId,
+          regenInstructions,
+        );
+        updateProject({
+          ...project,
+          chapters: project.chapters.map((ch) => ({
+            ...ch,
+            subChapters: ch.subChapters.map((s) =>
+              s.id === scId
+                ? {
+                    ...s,
+                    knowledgePoints: knowledge.knowledgePoints,
+                    examples: knowledge.examples,
+                    exercises: knowledge.exercises,
+                  }
+                : s,
+            ),
+          })),
+        });
+        setRegenScId(null);
+        setRegenInstructions("");
+      } catch (e) {
+        alert("重新生成失败: " + (e instanceof Error ? e.message : String(e)));
+      } finally {
+        setRegenLoading(false);
+      }
+    },
+    [project, updateProject, regenInstructions],
+  );
 
   const toggleComplete = useCallback(
     (subChapterId: string) => {
@@ -263,7 +351,11 @@ export default function ProjectDetailClient() {
       const pdfText = await extractTextFromPDF(tb.fileData);
       if (controller.signal.aborted) return;
       setAnalysisStatus("AI正在分析章节结构...");
-      const chapters = await analyzeChapters(pdfText, chapterModelId);
+      const chapters = await analyzeChapters(
+        pdfText,
+        chapterModelId,
+        controller.signal,
+      );
       if (controller.signal.aborted) return;
       updateProject({ ...project, chapters });
       for (let ci = 0; ci < chapters.length; ci++) {
@@ -476,11 +568,24 @@ export default function ProjectDetailClient() {
 
       {/* Left Sidebar */}
       <div
-        className={cn(
-          "border-r bg-card/30 transition-all duration-300 flex flex-col shrink-0",
-          sidebarOpen ? "w-[280px]" : "w-0 overflow-hidden border-r-0",
-        )}
+        className="border-r bg-card/30 flex flex-col shrink-0 relative"
+        style={{
+          width: sidebarWidth,
+          minWidth: sidebarWidth === 0 ? 0 : 200,
+          transition: dragging ? "none" : "width 0.2s",
+        }}
       >
+        {/* Resize handle */}
+        {sidebarWidth > 0 && (
+          <div
+            className="absolute top-0 -right-1.5 w-3 h-full cursor-col-resize hover:bg-primary/30 active:bg-primary/50 z-20"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              dragStart.current = { mx: e.clientX, w: sidebarWidth };
+              setDragging(true);
+            }}
+          />
+        )}
         <div className="shrink-0 px-3 py-3 border-b">
           <div className="flex items-center gap-2">
             <span className="text-lg">{project.icon}</span>
@@ -491,13 +596,13 @@ export default function ProjectDetailClient() {
               variant="ghost"
               size="icon"
               className="size-6"
-              onClick={() => setSidebarOpen(false)}
+              onClick={() => toggleSidebar()}
             >
               <X className="size-3" />
             </Button>
           </div>
         </div>
-        <ScrollArea className="flex-1">
+        <div className="flex-1 overflow-y-auto">
           <div className="p-2 space-y-3">
             {/* Chapter Tree */}
             <div>
@@ -620,18 +725,18 @@ export default function ProjectDetailClient() {
               />
             </div>
           </div>
-        </ScrollArea>
+        </div>
       </div>
 
       {/* Center: Study Viewer */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <div className="shrink-0 flex items-center gap-2 px-4 py-2 border-b bg-card/30">
-          {!sidebarOpen && (
+          {sidebarWidth === 0 && (
             <Button
               variant="ghost"
               size="icon"
               className="size-8"
-              onClick={() => setSidebarOpen(true)}
+              onClick={() => toggleSidebar()}
             >
               <ChevronRight className="size-4" />
             </Button>
@@ -744,12 +849,12 @@ function MaterialSection({
               <span
                 className="truncate flex-1 cursor-pointer hover:text-primary"
                 onClick={() => {
-                  if ((f as any).fileData) {
+                  if ((f as Textbook).fileData) {
                     const w = window.open("", "_blank");
                     if (w)
                       w.document.write(
                         '<iframe src="' +
-                          (f as any).fileData +
+                          (f as Textbook).fileData +
                           '" width="100%" height="100%" style="border:none"></iframe>',
                       );
                   }
@@ -981,8 +1086,7 @@ function StudyUnitViewer({
           onClick={() => onToggleComplete(subChapter.id)}
           className="shrink-0"
         >
-          <CheckCircle2 className="size-5" />
-          {subChapter.completed ? "已完成" : "✓ 完成学习"}
+          {subChapter.completed ? "✓ 已完成" : "✓ 完成学习"}
         </Button>
       </div>
       <Separator />
@@ -1137,7 +1241,7 @@ function StudyUnitViewer({
                       <div className="flex w-full items-start gap-2 text-left">
                         <CollapsibleTrigger className="flex flex-1 items-start gap-2 group/trigger">
                           <span className="flex-1 text-base font-medium">
-                            {ex.question}
+                            <Markdown content={ex.question} />
                           </span>
                           <ChevronDown className="size-5 text-muted-foreground shrink-0 mt-0.5 transition-transform group-aria-expanded/trigger:rotate-180" />
                         </CollapsibleTrigger>
@@ -1239,7 +1343,7 @@ function StudyUnitViewer({
                             {idx + 1}.
                           </span>
                           <span className="flex-1 text-base font-medium">
-                            {ex.question}
+                            <Markdown content={ex.question} />
                           </span>
                           <ChevronDown className="size-5 text-muted-foreground shrink-0 mt-0.5 transition-transform group-aria-expanded/trigger:rotate-180" />
                         </CollapsibleTrigger>

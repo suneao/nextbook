@@ -67,7 +67,7 @@ export function AppSidebar({
       <Separator />
 
       {/* Nav Items */}
-      <ScrollArea className="flex-1 px-2 py-3">
+      <ScrollArea className="flex-1 px-2 py-3 sidebar-scroll">
         <nav className="flex flex-col gap-1">
           {navItems.map((item) => {
             const active =
