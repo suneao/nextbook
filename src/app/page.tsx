@@ -30,11 +30,7 @@ interface Todo {
   completed: boolean;
 }
 
-const DEFAULT_TODOS: Todo[] = [
-  { id: "1", text: "复习函数极限章节", completed: false },
-  { id: "2", text: "完成线性代数习题集", completed: false },
-  { id: "3", text: "整理历史笔记", completed: false },
-];
+const DEFAULT_TODOS: Todo[] = [];
 const TODOS_KEY = "nextbook-todos";
 const PROJECTS_KEY = "nextbook-projects";
 
