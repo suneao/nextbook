@@ -7,12 +7,12 @@
     "frontendDist": "../out",
     "devUrl": "http://localhost:3000",
     "beforeDevCommand": "pnpm dev",
-    "beforeBuildCommand": "pnpm build"
+    "beforeBuildCommand": "node switch-config.js && pnpm build && node switch-config.js restore"
   },
   "app": {
     "windows": [
       {
-        "title": "NextBook - Study & Review",
+        "title": "NextBook - Study Smarter",
         "width": 1200,
         "height": 800,
         "minWidth": 800,
@@ -35,9 +35,6 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ],
-    "android": {
-      "debugApplicationIdSuffix": ".debug"
-    }
+    ]
   }
 }

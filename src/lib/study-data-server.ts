@@ -109,4 +109,17 @@ export const defaultSettings: AppSettings = {
   models: [],
 };
 
-export const defaultProjects: Project[] = [];
+export const defaultProjects: Project[] = [
+  {
+    id: "proj1",
+    name: "示例项目",
+    description: "上传教材开始学习",
+    color: "#3b82f6",
+    icon: "📐",
+    createdAt: new Date().toISOString(),
+    textbooks: [],
+    exercises: [],
+    exams: [],
+    chapters: [],
+  },
+];
