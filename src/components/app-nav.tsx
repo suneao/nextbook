@@ -9,11 +9,11 @@ export function AppNav() {
       <div className="max-w-7xl mx-auto flex h-14 items-center justify-between px-6 md:px-8 lg:px-10">
         {/* Logo & Title */}
         <div className="flex items-center gap-3">
-          <div className="flex size-8 items-center justify-center rounded-lg bg-primary">
-            <BookOpen className="size-4 text-primary-foreground" />
+          <div className="flex size-9 items-center justify-center rounded-lg bg-primary">
+            <BookOpen className="size-5 text-primary-foreground" />
           </div>
           <div className="flex flex-col leading-none">
-            <span className="font-bold text-sm tracking-tight">NextBook</span>
+            <span className="font-bold text-base tracking-tight">NextBook</span>
             <span className="text-[10px] text-muted-foreground">
               Study Smarter
             </span>
