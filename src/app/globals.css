@@ -3,6 +3,19 @@
 @import "shadcn/tailwind.css";
 @import "katex/dist/katex.min.css";
 
+@keyframes float {
+    0%,
+    100% {
+        transform: translate(0, 0) scale(1);
+    }
+    33% {
+        transform: translate(5%, -5%) scale(1.05);
+    }
+    66% {
+        transform: translate(-3%, 3%) scale(0.95);
+    }
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -119,14 +132,14 @@
 }
 
 @layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
-  html {
-    @apply font-sans;
-  }
+    * {
+        @apply border-border outline-ring/50;
+    }
+    body {
+        @apply bg-background text-foreground;
+    }
+    html {
+        @apply font-sans;
+    }
 }
 @import "./scrollbar.css";
