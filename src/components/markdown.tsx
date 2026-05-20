@@ -40,9 +40,13 @@ function renderMarkdown(text: string): string {
     '<code class="bg-muted px-1 py-0.5 rounded text-xs font-mono">$1</code>',
   );
 
-  // Bold / Italic
+  // Bold / Italic / Highlight
   html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
   html = html.replace(/\*(.+?)\*/g, "<em>$1</em>");
+  html = html.replace(
+    /==(.+?)==/g,
+    '<mark class="bg-yellow-200 dark:bg-yellow-500/30 text-yellow-900 dark:text-yellow-200 rounded px-0.5">$1</mark>',
+  );
 
   // Headers
   html = html.replace(
