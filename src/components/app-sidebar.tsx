@@ -8,7 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   LayoutDashboard,
   FolderKanban,
-  Settings,
+  Settings, HardDrive,
   BookOpen,
   ChevronLeft,
   ChevronRight,
@@ -19,6 +19,7 @@ import Link from "next/link";
 const navItems = [
   { href: "/", label: "主页", icon: LayoutDashboard },
   { href: "/projects", label: "项目管理", icon: FolderKanban },
+  { href: "/storage", label: "存储", icon: HardDrive },
   { href: "/settings", label: "设置", icon: Settings },
 ];
 

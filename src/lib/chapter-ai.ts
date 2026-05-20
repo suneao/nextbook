@@ -47,7 +47,7 @@ ${pdfText.slice(0, 15000)}`;
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
     ],
-    { temperature: 0.3, maxTokens: 16384, signal },
+    { temperature: 0.3, signal },
   );
 
   return parseChapterResponse(response);
@@ -92,7 +92,7 @@ ${pdfText.slice(0, 10000)}`;
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
     ],
-    { temperature: 0.3, maxTokens: 16384, signal },
+    { temperature: 0.3, signal },
   );
 
   return parseKnowledgeResponse(response);
@@ -138,7 +138,7 @@ export async function regenerateSubChapter(
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
     ],
-    { temperature: 0.3, maxTokens: 16384, signal },
+    { temperature: 0.3, signal },
   );
 
   return parseKnowledgeResponse(response);
@@ -163,8 +163,8 @@ function parseChapterResponse(response: string): Chapter[] {
         title: ch.title,
         order: chOrder++,
         type: "native",
-        pageStart: chIdx * 30 + 1,
-        pageEnd: (chIdx + 1) * 30,
+        pageStart: Math.floor((chIdx / raw.length) * 400) + 1,
+        pageEnd: Math.floor(((chIdx + 1) / raw.length) * 400),
         subChapters: (ch.subChapters || []).map((sc, scIdx) => ({
           id: `sc-ai-${Date.now()}-${chOrder}-${scIdx}`,
           title: sc.title,

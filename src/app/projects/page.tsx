@@ -14,9 +14,18 @@ import {
   Sparkles,
   FolderKanban,
   MoreHorizontal,
+  Download,
+  Upload,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type Project, defaultProjects } from "@/lib/study-data";
+import { useLocale } from "@/lib/i18n";
+import {
+  saveProject,
+  loadAllProjects,
+  deleteProjectStorage,
+} from "@/lib/storage";
+import JSZip from "jszip";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -38,7 +47,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const STORAGE_KEY = "nextbook-projects";
 const COLORS = [
   "#3b82f6",
   "#8b5cf6",
@@ -49,18 +57,12 @@ const COLORS = [
 ];
 const ICONS = ["📐", "📊", "🧪", "📚", "💻", "🌍", "🔬", "🎓"];
 
-function loadProjects(): Project[] {
+async function loadProjects(): Promise<Project[]> {
   if (typeof window === "undefined") return defaultProjects;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : defaultProjects;
-  } catch {
-    return defaultProjects;
-  }
+  return await loadAllProjects();
 }
-function saveProjects(p: Project[]) {
-  if (typeof window !== "undefined")
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(p));
+async function saveProjects(projs: Project[]) {
+  for (const p of projs) await saveProject(p);
 }
 function countSubChapters(p: Project) {
   let t = 0,
@@ -88,15 +90,6 @@ function ProjectDialog({
   const [desc, setDesc] = useState(edit?.description || "");
   const [color, setColor] = useState(edit?.color || COLORS[0]);
   const [icon, setIcon] = useState(edit?.icon || ICONS[0]);
-
-  useEffect(() => {
-    if (edit) {
-      setName(edit.name);
-      setDesc(edit.description);
-      setColor(edit.color);
-      setIcon(edit.icon);
-    }
-  }, [edit]);
 
   const submit = () => {
     if (!name.trim()) return;
@@ -202,16 +195,22 @@ function ProjectDialog({
 }
 
 export default function ProjectsPage() {
-  const [projects, setProjects] = useState<Project[]>(loadProjects);
+  const { t } = useLocale();
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    loadProjects().then((data) => {
+      setProjects(data);
+      setLoaded(true);
+    });
+  }, []);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editProject, setEditProject] = useState<Project | undefined>();
-  const [mounted, setMounted] = useState(false);
+
   useEffect(() => {
-    setMounted(true);
-  }, []);
-  useEffect(() => {
-    saveProjects(projects);
-  }, [projects]);
+    if (loaded) saveProjects(projects);
+  }, [projects, loaded]);
 
   const handleCreate = useCallback(
     (p: Project) => {
@@ -227,10 +226,51 @@ export default function ProjectsPage() {
 
   const handleDelete = (id: string) => {
     if (!confirm("确定删除此项目？所有数据将被清除。")) return;
+    deleteProjectStorage(id);
     setProjects((prev) => prev.filter((p) => p.id !== id));
   };
 
-  if (!mounted) return null;
+  const handleExportProject = async (project: Project) => {
+    try {
+      const zip = new JSZip();
+      zip.file("project.json", JSON.stringify(project, null, 2));
+      const blob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${project.name || "project"}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert("导出失败: " + (e instanceof Error ? e.message : String(e)));
+    }
+  };
+
+  const handleImportProject = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".zip";
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      try {
+        const zip = await JSZip.loadAsync(file);
+        const jsonFile = zip.file("project.json");
+        if (!jsonFile) {
+          alert("无效的项目文件：未找到 project.json");
+          return;
+        }
+        const project: Project = JSON.parse(await jsonFile.async("string"));
+        project.id = `proj-${Date.now()}`;
+        await saveProject(project);
+        setProjects((prev) => [project, ...prev]);
+        alert(`项目"${project.name}"导入成功！`);
+      } catch (e) {
+        alert("导入失败: " + (e instanceof Error ? e.message : String(e)));
+      }
+    };
+    input.click();
+  };
 
   return (
     <div className="h-[calc(100vh-3.5rem)] overflow-y-auto bg-gradient-to-b from-background to-muted/20">
@@ -245,26 +285,38 @@ export default function ProjectsPage() {
               管理你的学习项目
             </p>
           </div>
-          <Button
-            className="gap-2 shadow-sm"
-            onClick={() => {
-              setEditProject(undefined);
-              setDialogOpen(true);
-            }}
-          >
-            <Plus className="size-4" />
-            新建项目
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={handleImportProject}>
+              <Download className="size-4" />
+              导入
+            </Button>
+            <Button
+              className="gap-2 shadow-sm"
+              onClick={() => {
+                setEditProject(undefined);
+                setDialogOpen(true);
+              }}
+            >
+              <Plus className="size-4" />
+              新建项目
+            </Button>
+          </div>
         </div>
 
         {/* Content */}
-        {projects.length === 0 ? (
+        {!loaded ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {[1, 2].map((i) => (
+              <div key={i} className="h-40 bg-muted rounded-xl animate-pulse" />
+            ))}
+          </div>
+        ) : projects.length === 0 ? (
           <Card className="border-dashed bg-muted/20 shadow-none">
             <CardContent className="flex flex-col items-center py-16 text-center">
               <div className="flex size-16 items-center justify-center rounded-2xl bg-muted mb-4">
                 <FolderKanban className="size-8 text-muted-foreground/40" />
               </div>
-              <h2 className="text-lg font-semibold">还没有项目</h2>
+              <h2 className="text-lg font-semibold">{t("projects.empty")}</h2>
               <p className="text-sm text-muted-foreground mt-1 mb-6">
                 创建你的第一个学习项目开始学习
               </p>
@@ -285,6 +337,7 @@ export default function ProjectsPage() {
             {projects.map((project) => {
               const { total, completed } = countSubChapters(project);
               const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+
               return (
                 <div key={project.id} className="relative group/card">
                   <Link href={`/projects/${project.id}`}>
@@ -349,7 +402,9 @@ export default function ProjectsPage() {
                   {/* Action menu */}
                   <div className="absolute top-3 right-3 opacity-0 group-hover/card:opacity-100 transition-opacity z-10">
                     <DropdownMenu>
-                      <span className="inline-flex items-center justify-center size-8 rounded-lg bg-background/80 backdrop-blur shadow-sm hover:bg-muted transition-colors cursor-pointer" onClick={(e) => e.preventDefault()}><MoreHorizontal className="size-4" /></span>
+                      <DropdownMenuTrigger className="inline-flex items-center justify-center size-8 rounded-lg bg-background/80 backdrop-blur shadow-sm hover:bg-muted transition-colors">
+                        <MoreHorizontal className="size-4" />
+                      </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem
                           onClick={() => {
@@ -359,6 +414,12 @@ export default function ProjectsPage() {
                         >
                           <Pencil className="size-4" />
                           编辑
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleExportProject(project)}
+                        >
+                          <Upload className="size-4" />
+                          导出
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           className="text-destructive"
@@ -378,6 +439,7 @@ export default function ProjectsPage() {
       </div>
 
       <ProjectDialog
+        key={editProject?.id || "new"}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         onSubmit={handleCreate}

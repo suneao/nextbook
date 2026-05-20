@@ -8,6 +8,7 @@ import {
   startTransition,
 } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useLocale } from "@/lib/i18n";
 import {
   ChevronLeft,
   ChevronDown,
@@ -61,28 +62,21 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { getModelConfig } from "@/lib/ai-service";
+import {
+  saveProject,
+  loadAllProjects,
+  deleteProjectStorage,
+} from "@/lib/storage";
 
-const STORAGE_KEY = "nextbook-projects";
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
-function loadProjects(): Project[] {
+async function loadProjects(): Promise<Project[]> {
   if (typeof window === "undefined") return defaultProjects;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as Project[];
-  } catch {
-    /* ignore */
-  }
-  return defaultProjects;
+  return await loadAllProjects();
 }
 
-function saveProjects(projects: Project[]) {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
-  } catch (e) {
-    console.error("Failed to save projects (file too large?):", e);
-  }
+async function saveProjects(projects: Project[]) {
+  for (const p of projects) await saveProject(p);
 }
 
 function readFileAsBase64(file: File): Promise<string> {
@@ -94,7 +88,29 @@ function readFileAsBase64(file: File): Promise<string> {
   });
 }
 
+function dataUrlToBlobUrl(dataUrl: string): string {
+  try {
+    const parts = dataUrl.split(",");
+    if (parts.length < 2) return dataUrl;
+    const mimeMatch = parts[0].match(/:(.*?);/);
+    const mime = mimeMatch ? mimeMatch[1] : "application/pdf";
+    const isBase64 = parts[0].includes(";base64");
+    let bytes;
+    if (isBase64) {
+      const binary = atob(parts[1]);
+      bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    } else {
+      bytes = new TextEncoder().encode(decodeURIComponent(parts[1]));
+    }
+    return URL.createObjectURL(new Blob([bytes], { type: mime }));
+  } catch {
+    return dataUrl;
+  }
+}
+
 export default function ProjectDetailClient() {
+  const { t } = useLocale();
   const params = useParams();
   const router = useRouter();
   const projectId = params.id as string;
@@ -104,6 +120,11 @@ export default function ProjectDetailClient() {
     string | null
   >(null);
   const [chatOpen, setChatOpen] = useState(false);
+  const [filePreview, setFilePreview] = useState<{
+    data: string;
+    name: string;
+    blobUrl?: string;
+  } | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(280);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -149,29 +170,25 @@ export default function ProjectDetailClient() {
   const examInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const projects = loadProjects();
-    const found = projects.find((p) => p.id === projectId) ?? null;
-    const firstScId =
-      found &&
-      found.chapters.length > 0 &&
-      found.chapters[0].subChapters.length > 0
-        ? found.chapters[0].subChapters[0].id
-        : null;
-    startTransition(() => {
-      setProject(found);
-      setLoaded(true);
-      if (firstScId) setSelectedSubChapterId(firstScId);
+    loadProjects().then((projects) => {
+      const found = projects.find((p) => p.id === projectId) ?? null;
+      const firstScId =
+        found &&
+        found.chapters.length > 0 &&
+        found.chapters[0].subChapters.length > 0
+          ? found.chapters[0].subChapters[0].id
+          : null;
+      startTransition(() => {
+        setProject(found);
+        setLoaded(true);
+        if (firstScId) setSelectedSubChapterId(firstScId);
+      });
     });
   }, [projectId]);
 
-  const updateProject = useCallback((updated: Project) => {
+  const updateProject = useCallback(async (updated: Project) => {
     setProject(updated);
-    const allProjects = loadProjects();
-    const idx = allProjects.findIndex((p) => p.id === updated.id);
-    if (idx !== -1) {
-      allProjects[idx] = updated;
-      saveProjects(allProjects);
-    }
+    await saveProject(updated);
   }, []);
   const handleRegenerateSubChapter = useCallback(
     async (scId: string) => {
@@ -283,6 +300,7 @@ export default function ProjectDetailClient() {
           name: file.name,
           fileUrl: "#",
           fileData: base64,
+          fileSize: file.size,
           ...(type === "textbook" ? { totalPages: 0 } : {}),
         };
 
@@ -324,6 +342,19 @@ export default function ProjectDetailClient() {
     [project, updateProject],
   );
 
+  function extractPageRange(
+    fullText: string,
+    pageStart: number,
+    pageEnd: number,
+    totalPages: number,
+  ): string {
+    if (pageStart < 1 || pageEnd < 1 || totalPages < 1) return fullText;
+    const len = fullText.length;
+    const start = Math.floor(((pageStart - 1) / Math.max(totalPages, 1)) * len);
+    const end = Math.floor((pageEnd / Math.max(totalPages, 1)) * len);
+    return fullText.slice(Math.max(0, start), Math.min(len, end));
+  }
+
   const handleAIAnalyze = useCallback(async () => {
     if (!project || project.textbooks.length === 0) {
       alert("请先上传教材PDF");
@@ -359,12 +390,23 @@ export default function ProjectDetailClient() {
       if (controller.signal.aborted) return;
       updateProject({ ...project, chapters });
       for (let ci = 0; ci < chapters.length; ci++) {
-        for (let si = 0; si < chapters[ci].subChapters.length; si++) {
+        const chapter = chapters[ci];
+        const chapterText = (
+          chapter.pageStart && chapter.pageEnd
+            ? extractPageRange(
+                pdfText,
+                chapter.pageStart,
+                chapter.pageEnd,
+                tb.totalPages,
+              )
+            : pdfText
+        ).slice(0, 12000);
+        for (let si = 0; si < chapter.subChapters.length; si++) {
           if (controller.signal.aborted) {
             setAnalysisStatus("已停止");
             return;
           }
-          const sc = chapters[ci].subChapters[si];
+          const sc = chapter.subChapters[si];
           setAnalysisStatus(
             "正在提取 (" +
               (ci + 1) +
@@ -376,7 +418,7 @@ export default function ProjectDetailClient() {
           );
           try {
             const knowledge = await extractKnowledgePoints(
-              pdfText,
+              chapterText,
               sc.title,
               chapterModelId,
             );
@@ -384,7 +426,15 @@ export default function ProjectDetailClient() {
             sc.knowledgePoints = knowledge.knowledgePoints;
             sc.examples = knowledge.examples;
             sc.exercises = knowledge.exercises;
-            updateProject({ ...project, chapters: [...chapters] });
+            // Batch update every 2 sub-chapters to avoid excessive re-renders
+            if (
+              (ci * chapters[0]?.subChapters?.length || 1) + (si % 2) === 0 ||
+              ci === chapters.length - 1
+            ) {
+              startTransition(() =>
+                updateProject({ ...project, chapters: [...chapters] }),
+              );
+            }
           } catch {
             /* continue */
           }
@@ -511,7 +561,18 @@ export default function ProjectDetailClient() {
       ch.subChapters.some((sc) => sc.id === selectedSubChapterId),
     ) ?? null;
 
-  if (!loaded) return null;
+  if (!loaded)
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-3.5rem)]">
+        <div className="space-y-4 w-full max-w-2xl px-6">
+          <div className="h-8 w-64 bg-muted rounded-lg animate-pulse" />
+          <div className="flex gap-4">
+            <div className="h-[60vh] w-[280px] bg-muted rounded-xl animate-pulse shrink-0" />
+            <div className="flex-1 h-[60vh] bg-muted rounded-xl animate-pulse" />
+          </div>
+        </div>
+      </div>
+    );
 
   if (!project) {
     return (
@@ -536,10 +597,13 @@ export default function ProjectDetailClient() {
         ref={textbookInputRef}
         type="file"
         accept=".pdf"
+        multiple
         className="hidden"
         onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) handleFileUpload("textbook", f);
+          const files = e.target.files;
+          if (files) {
+            for (const f of Array.from(files)) handleFileUpload("textbook", f);
+          }
           e.target.value = "";
         }}
       />
@@ -549,8 +613,8 @@ export default function ProjectDetailClient() {
         accept=".pdf"
         className="hidden"
         onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) handleFileUpload("exercise", f);
+          for (const f of e.target.files ? Array.from(e.target.files) : [])
+            handleFileUpload("exercise", f);
           e.target.value = "";
         }}
       />
@@ -560,15 +624,18 @@ export default function ProjectDetailClient() {
         accept=".pdf"
         className="hidden"
         onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) handleFileUpload("exam", f);
+          for (const f of e.target.files ? Array.from(e.target.files) : [])
+            handleFileUpload("exam", f);
           e.target.value = "";
         }}
       />
 
       {/* Left Sidebar */}
       <div
-        className="border-r bg-card/30 flex flex-col shrink-0 relative"
+        className={cn(
+          "border-r bg-card/30 flex flex-col shrink-0 relative",
+          sidebarWidth === 0 && "overflow-hidden border-r-0",
+        )}
         style={{
           width: sidebarWidth,
           minWidth: sidebarWidth === 0 ? 0 : 200,
@@ -637,9 +704,18 @@ export default function ProjectDetailClient() {
                 </div>
               </div>
               {analyzing && analysisStatus && (
-                <p className="text-xs text-violet-500 px-2 py-1">
-                  {analysisStatus}
-                </p>
+                <div className="flex items-center gap-1 px-2 py-1">
+                  <p className="text-xs text-violet-500 flex-1">
+                    {analysisStatus}
+                  </p>
+                  <button
+                    onClick={handleStopAnalysis}
+                    className="size-5 flex items-center justify-center rounded hover:bg-red-100 dark:hover:bg-red-900/20 shrink-0"
+                    title="停止生成"
+                  >
+                    <X className="size-3 text-red-500" />
+                  </button>
+                </div>
               )}
               {addingChapter && (
                 <div className="flex gap-1 px-2 py-1">
@@ -700,6 +776,9 @@ export default function ProjectDetailClient() {
                 onUpload={() => textbookInputRef.current?.click()}
                 onRemove={(id) => handleRemoveFile("textbook", id)}
                 uploading={uploading}
+                onPreviewFile={(data, name) =>
+                  setFilePreview(data ? { data, name, blobUrl: dataUrlToBlobUrl(data) } : null)
+                }
               />
 
               {/* Exercises */}
@@ -711,6 +790,9 @@ export default function ProjectDetailClient() {
                 onUpload={() => exerciseInputRef.current?.click()}
                 onRemove={(id) => handleRemoveFile("exercise", id)}
                 uploading={uploading}
+                onPreviewFile={(data, name) =>
+                  setFilePreview(data ? { data, name, blobUrl: dataUrlToBlobUrl(data) } : null)
+                }
               />
 
               {/* Exams */}
@@ -722,6 +804,9 @@ export default function ProjectDetailClient() {
                 onUpload={() => examInputRef.current?.click()}
                 onRemove={(id) => handleRemoveFile("exam", id)}
                 uploading={uploading}
+                onPreviewFile={(data, name) =>
+                  setFilePreview(data ? { data, name, blobUrl: dataUrlToBlobUrl(data) } : null)
+                }
               />
             </div>
           </div>
@@ -756,25 +841,55 @@ export default function ProjectDetailClient() {
             </span>
           )}
         </div>
-        <ScrollArea className="flex-1 h-full">
-          {selectedSubChapter ? (
-            <StudyUnitViewer
-              subChapter={selectedSubChapter}
-              onToggleComplete={toggleComplete}
-              onUpdate={handleUpdateSubChapter}
-            />
-          ) : (
-            <div className="flex flex-col items-center justify-center py-24 text-center">
-              <BookOpen className="size-10 text-muted-foreground mb-3" />
-              <p className="text-sm text-muted-foreground">
-                从左侧目录树选择一个章节开始学习
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                也可以在下方学习材料区域上传教材PDF
-              </p>
+        {filePreview ? (
+          <div className="flex-1 flex flex-col min-h-0">
+            <div className="shrink-0 flex items-center gap-2 px-4 py-2 border-b bg-card/30">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  if (filePreview && filePreview.blobUrl)
+                    URL.revokeObjectURL(filePreview.blobUrl);
+                  setFilePreview(null);
+                }}
+              >
+                <ChevronLeft className="size-4" />
+                返回
+              </Button>
+              <Separator orientation="vertical" className="h-4" />
+              <span className="text-sm font-medium truncate">
+                {filePreview.name}
+              </span>
             </div>
-          )}
-        </ScrollArea>
+            <div className="flex-1 min-h-0">
+              <iframe
+                src={filePreview.blobUrl || filePreview.data}
+                className="w-full h-full border-0"
+                title={filePreview.name}
+              />
+            </div>
+          </div>
+        ) : (
+          <ScrollArea className="flex-1 h-full">
+            {selectedSubChapter ? (
+              <StudyUnitViewer
+                subChapter={selectedSubChapter}
+                onToggleComplete={toggleComplete}
+                onUpdate={handleUpdateSubChapter}
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center py-24 text-center">
+                <BookOpen className="size-10 text-muted-foreground mb-3" />
+                <p className="text-sm text-muted-foreground">
+                  从左侧目录树选择一个章节开始学习
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  也可以在下方学习材料区域上传教材PDF
+                </p>
+              </div>
+            )}
+          </ScrollArea>
+        )}
       </div>
 
       <AIChatPanel
@@ -782,6 +897,7 @@ export default function ProjectDetailClient() {
         onClose={() => setChatOpen(false)}
         chapterTitle={selectedSubChapter?.title}
       />
+
       {!chatOpen && (
         <button
           className="fixed bottom-6 right-6 z-40 size-12 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/80 transition-colors"
@@ -805,6 +921,7 @@ function MaterialSection({
   onUpload,
   onRemove,
   uploading,
+  onPreviewFile,
 }: {
   icon: typeof BookOpen;
   label: string;
@@ -813,6 +930,7 @@ function MaterialSection({
   onUpload: () => void;
   onRemove: (id: string) => void;
   uploading: boolean;
+  onPreviewFile: (data: string | null, name: string) => void;
 }) {
   return (
     <div>
@@ -848,17 +966,9 @@ function MaterialSection({
               <File className="size-4 text-muted-foreground shrink-0" />
               <span
                 className="truncate flex-1 cursor-pointer hover:text-primary"
-                onClick={() => {
-                  if ((f as Textbook).fileData) {
-                    const w = window.open("", "_blank");
-                    if (w)
-                      w.document.write(
-                        '<iframe src="' +
-                          (f as Textbook).fileData +
-                          '" width="100%" height="100%" style="border:none"></iframe>',
-                      );
-                  }
-                }}
+                onClick={() =>
+                  onPreviewFile((f as Textbook).fileData || null, f.name)
+                }
                 title="点击预览"
               >
                 {f.name}
@@ -917,9 +1027,9 @@ function ChapterTreeNode({
 
   return (
     <Collapsible defaultOpen>
-      <div className="flex items-center gap-0.5 rounded-md px-2 py-1 group hover:bg-muted/50 transition-colors">
+      <div className="relative flex items-center gap-0.5 rounded-md px-2 py-1 group hover:bg-muted/50 transition-colors">
         <CollapsibleTrigger className="flex flex-1 items-center gap-1.5 text-sm font-medium min-w-0">
-          <ChevronDown className="size-4 text-muted-foreground shrink-0" />
+          <ChevronDown className="size-4 text-muted-foreground shrink-0 transition-transform group-aria-expanded:rotate-180" />
           <span
             className="shrink-0"
             title={isNative ? "教材原生章节" : "自定义章节"}
@@ -939,46 +1049,51 @@ function ChapterTreeNode({
             {isNative ? "原生" : "自定义"}
           </Badge>
         </CollapsibleTrigger>
-        {isNative && onRegenerateChapter && (
-          <button
-            type="button"
-            className="size-5 opacity-0 group-hover:opacity-100 flex items-center justify-center rounded hover:bg-muted"
-            onClick={(e) => {
-              e.stopPropagation();
-              onRegenerateChapter(chapter.id);
-            }}
-            title="重新生成"
-          >
-            <RotateCw className="size-3.5" />
-          </button>
-        )}
-        <button
-          type="button"
-          className="size-5 opacity-0 group-hover:opacity-100 flex items-center justify-center rounded hover:bg-muted"
-          onClick={(e) => {
-            e.stopPropagation();
-            onAddSubChapter(chapter.id);
-          }}
-          title="添加小节"
-        >
-          <Plus className="size-3.5" />
-        </button>
-        <button
-          type="button"
-          className="size-5 opacity-0 group-hover:opacity-100 flex items-center justify-center rounded hover:bg-muted"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDeleteChapter(chapter.id);
-          }}
-          title="删除章节"
-        >
-          <Trash2 className="size-3.5 text-destructive" />
-        </button>
+        {/* Spacer so the count clears the absolutely-positioned action buttons */}
+        <span className="w-14 shrink-0" />
         {totalCount > 0 && (
           <span className="text-xs text-muted-foreground shrink-0">
             {completedCount}/{totalCount}
           </span>
         )}
+        {/* Action buttons — absolutely positioned to avoid flex stacking */}
+        <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          {isNative && onRegenerateChapter && (
+            <button
+              type="button"
+              className="size-5 flex items-center justify-center rounded hover:bg-muted"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRegenerateChapter(chapter.id);
+              }}
+              title="重新生成"
+            >
+              <RotateCw className="size-3.5" />
+            </button>
+          )}
+          <button
+            type="button"
+            className="size-5 flex items-center justify-center rounded hover:bg-muted"
+            onClick={(e) => {
+              e.stopPropagation();
+              onAddSubChapter(chapter.id);
+            }}
+            title="添加小节"
+          >
+            <Plus className="size-3.5" />
+          </button>
+          <button
+            type="button"
+            className="size-5 flex items-center justify-center rounded hover:bg-muted"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDeleteChapter(chapter.id);
+            }}
+            title="删除章节"
+          >
+            <Trash2 className="size-3.5 text-destructive" />
+          </button>
+        </div>
       </div>
       <CollapsibleContent>
         <div className="ml-4 space-y-0.5 mt-0.5">
@@ -1056,6 +1171,7 @@ function StudyUnitViewer({
   onToggleComplete: (id: string) => void;
   onUpdate: (updated: SubChapter) => void;
 }) {
+  const { t: tv } = useLocale();
   const [editingKpId, setEditingKpId] = useState<string | null>(null);
   const [editingExampleId, setEditingExampleId] = useState<string | null>(null);
   const [editingExerciseId, setEditingExerciseId] = useState<string | null>(
@@ -1068,6 +1184,73 @@ function StudyUnitViewer({
   const [editExampleSolution, setEditExampleSolution] = useState("");
   const [editExerciseQuestion, setEditExerciseQuestion] = useState("");
   const [editExerciseSolution, setEditExerciseSolution] = useState("");
+  const [addingType, setAddingType] = useState<
+    "kp" | "example" | "exercise" | null
+  >(null);
+
+  const [newKpTitle, setNewKpTitle] = useState("");
+  const [newKpContent, setNewKpContent] = useState("");
+  const [newExampleQuestion, setNewExampleQuestion] = useState("");
+  const [newExampleSolution, setNewExampleSolution] = useState("");
+  const [newExerciseQuestion, setNewExerciseQuestion] = useState("");
+  const [newExerciseSolution, setNewExerciseSolution] = useState("");
+
+  const handleAddKp = () => {
+    if (!newKpTitle.trim()) return;
+    const updated = {
+      ...subChapter,
+      knowledgePoints: [
+        ...subChapter.knowledgePoints,
+        {
+          id: `kp-${Date.now()}`,
+          title: newKpTitle.trim(),
+          content: newKpContent.trim(),
+        },
+      ],
+    };
+    onUpdate(updated);
+    setNewKpTitle("");
+    setNewKpContent("");
+    setAddingType(null);
+  };
+
+  const handleAddExample = () => {
+    if (!newExampleQuestion.trim()) return;
+    const updated = {
+      ...subChapter,
+      examples: [
+        ...subChapter.examples,
+        {
+          id: `ex-${Date.now()}`,
+          question: newExampleQuestion.trim(),
+          solution: newExampleSolution.trim(),
+        },
+      ],
+    };
+    onUpdate(updated);
+    setNewExampleQuestion("");
+    setNewExampleSolution("");
+    setAddingType(null);
+  };
+
+  const handleAddExercise = () => {
+    if (!newExerciseQuestion.trim()) return;
+    const updated = {
+      ...subChapter,
+      exercises: [
+        ...subChapter.exercises,
+        {
+          id: `exr-${Date.now()}`,
+          question: newExerciseQuestion.trim(),
+          solution: newExerciseSolution.trim(),
+        },
+      ],
+    };
+    onUpdate(updated);
+    setNewExerciseQuestion("");
+    setNewExerciseSolution("");
+    setAddingType(null);
+  };
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-6 space-y-8">
@@ -1075,9 +1258,10 @@ function StudyUnitViewer({
         <div>
           <h1 className="text-2xl font-bold">{subChapter.title}</h1>
           <p className="text-xs text-muted-foreground mt-1">
-            {subChapter.knowledgePoints.length} 个知识点 ·{" "}
-            {subChapter.examples.length} 道例题 · {subChapter.exercises.length}{" "}
-            道习题
+            {subChapter.knowledgePoints.length}
+            {tv("project.knowledgePoints")} · {subChapter.examples.length}
+            {tv("project.examples")} · {subChapter.exercises.length}
+            {tv("project.exercisesSection")}`
           </p>
         </div>
         <Button
@@ -1090,28 +1274,164 @@ function StudyUnitViewer({
         </Button>
       </div>
       <Separator />
-      {subChapter.knowledgePoints.length > 0 && (
-        <section>
-          <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-            <BookOpen className="size-5 text-primary" />
-            知识点
-          </h2>
-          <div className="space-y-6">
-            {subChapter.knowledgePoints.map((kp) => (
-              <div key={kp.id} className="rounded-lg border bg-card p-5 group">
-                {editingKpId === kp.id ? (
+      <section>
+        <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+          <BookOpen className="size-5 text-primary" />
+          知识点
+        </h2>
+        <div className="space-y-6">
+          {subChapter.knowledgePoints.map((kp) => (
+            <div key={kp.id} className="rounded-lg border bg-card p-5 group">
+              {editingKpId === kp.id ? (
+                <div className="space-y-3">
+                  <Input
+                    value={editKpTitle}
+                    onChange={(e) => setEditKpTitle(e.target.value)}
+                    placeholder="标题"
+                    className="text-sm"
+                  />
+                  <Textarea
+                    value={editKpContent}
+                    onChange={(e) => setEditKpContent(e.target.value)}
+                    placeholder="内容（支持Markdown和LaTeX公式）"
+                    className="text-sm min-h-[120px]"
+                  />
+                  <div className="flex items-center gap-1">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="size-7"
+                      onClick={() => {
+                        const updated = {
+                          ...subChapter,
+                          knowledgePoints: subChapter.knowledgePoints.map(
+                            (k) =>
+                              k.id === kp.id
+                                ? {
+                                    ...k,
+                                    title: editKpTitle,
+                                    content: editKpContent,
+                                  }
+                                : k,
+                          ),
+                        };
+                        onUpdate(updated);
+                        setEditingKpId(null);
+                      }}
+                      title="保存"
+                    >
+                      <Check className="size-3.5 text-emerald-500" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="size-7"
+                      onClick={() => setEditingKpId(null)}
+                      title="取消"
+                    >
+                      <X className="size-3.5 text-destructive" />
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-base font-semibold">{kp.title}</h3>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="size-6 shrink-0 opacity-0 group-hover:opacity-100"
+                      onClick={() => {
+                        setEditKpTitle(kp.title);
+                        setEditKpContent(kp.content);
+                        setEditingKpId(kp.id);
+                      }}
+                      title="编辑"
+                    >
+                      <Pencil className="size-3" />
+                    </Button>
+                  </div>
+                  <Markdown content={kp.content} />
+                </>
+              )}
+            </div>
+          ))}
+          {/* Add new knowledge point form */}
+          {addingType === "kp" ? (
+            <div className="rounded-lg border border-dashed border-primary/40 bg-primary/5 p-5 space-y-3">
+              <Input
+                value={newKpTitle}
+                onChange={(e) => setNewKpTitle(e.target.value)}
+                placeholder="知识点标题"
+                className="text-sm"
+                autoFocus
+              />
+              <Textarea
+                value={newKpContent}
+                onChange={(e) => setNewKpContent(e.target.value)}
+                placeholder="内容（支持Markdown和LaTeX公式）"
+                className="text-sm min-h-[120px]"
+              />
+              <div className="flex items-center gap-1">
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="size-7"
+                  onClick={handleAddKp}
+                  title="保存"
+                >
+                  <Check className="size-3.5 text-emerald-500" />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="size-7"
+                  onClick={() => {
+                    setNewKpTitle("");
+                    setNewKpContent("");
+                    setAddingType(null);
+                  }}
+                  title="取消"
+                >
+                  <X className="size-3.5 text-destructive" />
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full border-dashed gap-1"
+              onClick={() => setAddingType("kp")}
+            >
+              <Plus className="size-3.5" />
+              添加知识点
+            </Button>
+          )}
+        </div>
+      </section>
+      <section>
+        <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+          <FileQuestion className="size-5 text-amber-500" />
+          例题
+        </h2>
+        <div className="space-y-3">
+          {subChapter.examples.map((ex) => (
+            <Collapsible key={ex.id}>
+              <div className="rounded-md border bg-card p-3 group">
+                {editingExampleId === ex.id ? (
                   <div className="space-y-3">
-                    <Input
-                      value={editKpTitle}
-                      onChange={(e) => setEditKpTitle(e.target.value)}
-                      placeholder="标题"
-                      className="text-sm"
+                    <Textarea
+                      value={editExampleQuestion}
+                      onChange={(e) => setEditExampleQuestion(e.target.value)}
+                      placeholder="题目"
+                      className="text-sm min-h-[60px]"
                     />
                     <Textarea
-                      value={editKpContent}
-                      onChange={(e) => setEditKpContent(e.target.value)}
-                      placeholder="内容（支持Markdown和LaTeX公式）"
-                      className="text-sm min-h-[120px]"
+                      value={editExampleSolution}
+                      onChange={(e) => setEditExampleSolution(e.target.value)}
+                      placeholder="解答"
+                      className="text-sm min-h-[60px]"
                     />
                     <div className="flex items-center gap-1">
                       <Button
@@ -1121,19 +1441,18 @@ function StudyUnitViewer({
                         onClick={() => {
                           const updated = {
                             ...subChapter,
-                            knowledgePoints: subChapter.knowledgePoints.map(
-                              (k) =>
-                                k.id === kp.id
-                                  ? {
-                                      ...k,
-                                      title: editKpTitle,
-                                      content: editKpContent,
-                                    }
-                                  : k,
+                            examples: subChapter.examples.map((e) =>
+                              e.id === ex.id
+                                ? {
+                                    ...e,
+                                    question: editExampleQuestion,
+                                    solution: editExampleSolution,
+                                  }
+                                : e,
                             ),
                           };
                           onUpdate(updated);
-                          setEditingKpId(null);
+                          setEditingExampleId(null);
                         }}
                         title="保存"
                       >
@@ -1143,7 +1462,7 @@ function StudyUnitViewer({
                         size="icon"
                         variant="ghost"
                         className="size-7"
-                        onClick={() => setEditingKpId(null)}
+                        onClick={() => setEditingExampleId(null)}
                         title="取消"
                       >
                         <X className="size-3.5 text-destructive" />
@@ -1152,227 +1471,238 @@ function StudyUnitViewer({
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-base font-semibold">{kp.title}</h3>
+                    <div className="flex w-full items-start gap-2 text-left">
+                      <CollapsibleTrigger className="flex flex-1 items-start gap-2 group/trigger">
+                        <span className="flex-1 text-base font-medium">
+                          <Markdown content={ex.question} />
+                        </span>
+                        <ChevronDown className="size-5 text-muted-foreground shrink-0 mt-0.5 transition-transform group-aria-expanded/trigger:rotate-180" />
+                      </CollapsibleTrigger>
                       <Button
                         size="icon"
                         variant="ghost"
-                        className="size-6 shrink-0 opacity-0 group-hover:opacity-100"
+                        className="size-7 shrink-0 opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity"
                         onClick={() => {
-                          setEditKpTitle(kp.title);
-                          setEditKpContent(kp.content);
-                          setEditingKpId(kp.id);
+                          setEditExampleQuestion(ex.question);
+                          setEditExampleSolution(ex.solution);
+                          setEditingExampleId(ex.id);
                         }}
                         title="编辑"
                       >
-                        <Pencil className="size-3" />
+                        <Pencil className="size-4" />
                       </Button>
                     </div>
-                    <Markdown content={kp.content} />
+                    <CollapsibleContent>
+                      <Separator className="my-2" />
+                      <Markdown content={ex.solution} />
+                    </CollapsibleContent>
                   </>
                 )}
               </div>
-            ))}
-          </div>
-        </section>
-      )}
-      {subChapter.examples.length > 0 && (
-        <section>
-          <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-            <FileQuestion className="size-5 text-amber-500" />
-            例题
-          </h2>
-          <div className="space-y-3">
-            {subChapter.examples.map((ex) => (
-              <Collapsible key={ex.id}>
-                <div className="rounded-md border bg-card p-3 group">
-                  {editingExampleId === ex.id ? (
-                    <div className="space-y-3">
-                      <Textarea
-                        value={editExampleQuestion}
-                        onChange={(e) => setEditExampleQuestion(e.target.value)}
-                        placeholder="题目"
-                        className="text-sm min-h-[60px]"
-                      />
-                      <Textarea
-                        value={editExampleSolution}
-                        onChange={(e) => setEditExampleSolution(e.target.value)}
-                        placeholder="解答"
-                        className="text-sm min-h-[60px]"
-                      />
-                      <div className="flex items-center gap-1">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="size-7"
-                          onClick={() => {
-                            const updated = {
-                              ...subChapter,
-                              examples: subChapter.examples.map((e) =>
-                                e.id === ex.id
-                                  ? {
-                                      ...e,
-                                      question: editExampleQuestion,
-                                      solution: editExampleSolution,
-                                    }
-                                  : e,
-                              ),
-                            };
-                            onUpdate(updated);
-                            setEditingExampleId(null);
-                          }}
-                          title="保存"
-                        >
-                          <Check className="size-3.5 text-emerald-500" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="size-7"
-                          onClick={() => setEditingExampleId(null)}
-                          title="取消"
-                        >
-                          <X className="size-3.5 text-destructive" />
-                        </Button>
-                      </div>
+            </Collapsible>
+          ))}
+          {/* Add new example form */}
+          {addingType === "example" ? (
+            <div className="rounded-md border border-dashed border-amber-500/40 bg-amber-500/5 p-3 space-y-3">
+              <Textarea
+                value={newExampleQuestion}
+                onChange={(e) => setNewExampleQuestion(e.target.value)}
+                placeholder="例题题目"
+                className="text-sm min-h-[60px]"
+                autoFocus
+              />
+              <Textarea
+                value={newExampleSolution}
+                onChange={(e) => setNewExampleSolution(e.target.value)}
+                placeholder="解答"
+                className="text-sm min-h-[60px]"
+              />
+              <div className="flex items-center gap-1">
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="size-7"
+                  onClick={handleAddExample}
+                  title="保存"
+                >
+                  <Check className="size-3.5 text-emerald-500" />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="size-7"
+                  onClick={() => {
+                    setNewExampleQuestion("");
+                    setNewExampleSolution("");
+                    setAddingType(null);
+                  }}
+                  title="取消"
+                >
+                  <X className="size-3.5 text-destructive" />
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full border-dashed gap-1"
+              onClick={() => setAddingType("example")}
+            >
+              <Plus className="size-3.5" />
+              添加例题
+            </Button>
+          )}
+        </div>
+      </section>
+      <section>
+        <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+          <FileQuestion className="size-5 text-emerald-500" />
+          课后习题
+        </h2>
+        <div className="space-y-3">
+          {subChapter.exercises.map((ex, idx) => (
+            <Collapsible key={ex.id}>
+              <div className="rounded-md border bg-card p-3 group">
+                {editingExerciseId === ex.id ? (
+                  <div className="space-y-3">
+                    <Textarea
+                      value={editExerciseQuestion}
+                      onChange={(e) => setEditExerciseQuestion(e.target.value)}
+                      placeholder="题目"
+                      className="text-sm min-h-[60px]"
+                    />
+                    <Textarea
+                      value={editExerciseSolution}
+                      onChange={(e) => setEditExerciseSolution(e.target.value)}
+                      placeholder="解答"
+                      className="text-sm min-h-[60px]"
+                    />
+                    <div className="flex items-center gap-1">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="size-7"
+                        onClick={() => {
+                          const updated = {
+                            ...subChapter,
+                            exercises: subChapter.exercises.map((e) =>
+                              e.id === ex.id
+                                ? {
+                                    ...e,
+                                    question: editExerciseQuestion,
+                                    solution: editExerciseSolution,
+                                  }
+                                : e,
+                            ),
+                          };
+                          onUpdate(updated);
+                          setEditingExerciseId(null);
+                        }}
+                        title="保存"
+                      >
+                        <Check className="size-3.5 text-emerald-500" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="size-7"
+                        onClick={() => setEditingExerciseId(null)}
+                        title="取消"
+                      >
+                        <X className="size-3.5 text-destructive" />
+                      </Button>
                     </div>
-                  ) : (
-                    <>
-                      <div className="flex w-full items-start gap-2 text-left">
-                        <CollapsibleTrigger className="flex flex-1 items-start gap-2 group/trigger">
-                          <span className="flex-1 text-base font-medium">
-                            <Markdown content={ex.question} />
-                          </span>
-                          <ChevronDown className="size-5 text-muted-foreground shrink-0 mt-0.5 transition-transform group-aria-expanded/trigger:rotate-180" />
-                        </CollapsibleTrigger>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="size-7 shrink-0 opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity"
-                          onClick={() => {
-                            setEditExampleQuestion(ex.question);
-                            setEditExampleSolution(ex.solution);
-                            setEditingExampleId(ex.id);
-                          }}
-                          title="编辑"
-                        >
-                          <Pencil className="size-4" />
-                        </Button>
-                      </div>
-                      <CollapsibleContent>
-                        <Separator className="my-2" />
-                        <Markdown content={ex.solution} />
-                      </CollapsibleContent>
-                    </>
-                  )}
-                </div>
-              </Collapsible>
-            ))}
-          </div>
-        </section>
-      )}
-      {subChapter.exercises.length > 0 && (
-        <section>
-          <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-            <FileQuestion className="size-5 text-emerald-500" />
-            课后习题
-          </h2>
-          <div className="space-y-3">
-            {subChapter.exercises.map((ex, idx) => (
-              <Collapsible key={ex.id}>
-                <div className="rounded-md border bg-card p-3 group">
-                  {editingExerciseId === ex.id ? (
-                    <div className="space-y-3">
-                      <Textarea
-                        value={editExerciseQuestion}
-                        onChange={(e) =>
-                          setEditExerciseQuestion(e.target.value)
-                        }
-                        placeholder="题目"
-                        className="text-sm min-h-[60px]"
-                      />
-                      <Textarea
-                        value={editExerciseSolution}
-                        onChange={(e) =>
-                          setEditExerciseSolution(e.target.value)
-                        }
-                        placeholder="解答"
-                        className="text-sm min-h-[60px]"
-                      />
-                      <div className="flex items-center gap-1">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="size-7"
-                          onClick={() => {
-                            const updated = {
-                              ...subChapter,
-                              exercises: subChapter.exercises.map((e) =>
-                                e.id === ex.id
-                                  ? {
-                                      ...e,
-                                      question: editExerciseQuestion,
-                                      solution: editExerciseSolution,
-                                    }
-                                  : e,
-                              ),
-                            };
-                            onUpdate(updated);
-                            setEditingExerciseId(null);
-                          }}
-                          title="保存"
-                        >
-                          <Check className="size-3.5 text-emerald-500" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="size-7"
-                          onClick={() => setEditingExerciseId(null)}
-                          title="取消"
-                        >
-                          <X className="size-3.5 text-destructive" />
-                        </Button>
-                      </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex w-full items-start gap-2 text-left">
+                      <CollapsibleTrigger className="flex flex-1 items-start gap-2 group/trigger">
+                        <span className="text-sm font-medium text-muted-foreground shrink-0 mt-0.5">
+                          {idx + 1}.
+                        </span>
+                        <span className="flex-1 text-base font-medium">
+                          <Markdown content={ex.question} />
+                        </span>
+                        <ChevronDown className="size-5 text-muted-foreground shrink-0 mt-0.5 transition-transform group-aria-expanded/trigger:rotate-180" />
+                      </CollapsibleTrigger>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="size-7 shrink-0 opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity"
+                        onClick={() => {
+                          setEditExerciseQuestion(ex.question);
+                          setEditExerciseSolution(ex.solution);
+                          setEditingExerciseId(ex.id);
+                        }}
+                        title="编辑"
+                      >
+                        <Pencil className="size-4" />
+                      </Button>
                     </div>
-                  ) : (
-                    <>
-                      <div className="flex w-full items-start gap-2 text-left">
-                        <CollapsibleTrigger className="flex flex-1 items-start gap-2 group/trigger">
-                          <span className="text-sm font-medium text-muted-foreground shrink-0 mt-0.5">
-                            {idx + 1}.
-                          </span>
-                          <span className="flex-1 text-base font-medium">
-                            <Markdown content={ex.question} />
-                          </span>
-                          <ChevronDown className="size-5 text-muted-foreground shrink-0 mt-0.5 transition-transform group-aria-expanded/trigger:rotate-180" />
-                        </CollapsibleTrigger>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="size-7 shrink-0 opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity"
-                          onClick={() => {
-                            setEditExerciseQuestion(ex.question);
-                            setEditExerciseSolution(ex.solution);
-                            setEditingExerciseId(ex.id);
-                          }}
-                          title="编辑"
-                        >
-                          <Pencil className="size-4" />
-                        </Button>
-                      </div>
-                      <CollapsibleContent>
-                        <Separator className="my-2" />
-                        <Markdown content={ex.solution} />
-                      </CollapsibleContent>
-                    </>
-                  )}
-                </div>
-              </Collapsible>
-            ))}
-          </div>
-        </section>
-      )}
+                    <CollapsibleContent>
+                      <Separator className="my-2" />
+                      <Markdown content={ex.solution} />
+                    </CollapsibleContent>
+                  </>
+                )}
+              </div>
+            </Collapsible>
+          ))}
+          {/* Add new exercise form */}
+          {addingType === "exercise" ? (
+            <div className="rounded-md border border-dashed border-emerald-500/40 bg-emerald-500/5 p-3 space-y-3">
+              <Textarea
+                value={newExerciseQuestion}
+                onChange={(e) => setNewExerciseQuestion(e.target.value)}
+                placeholder="习题题目"
+                className="text-sm min-h-[60px]"
+                autoFocus
+              />
+              <Textarea
+                value={newExerciseSolution}
+                onChange={(e) => setNewExerciseSolution(e.target.value)}
+                placeholder="解答"
+                className="text-sm min-h-[60px]"
+              />
+              <div className="flex items-center gap-1">
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="size-7"
+                  onClick={handleAddExercise}
+                  title="保存"
+                >
+                  <Check className="size-3.5 text-emerald-500" />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="size-7"
+                  onClick={() => {
+                    setNewExerciseQuestion("");
+                    setNewExerciseSolution("");
+                    setAddingType(null);
+                  }}
+                  title="取消"
+                >
+                  <X className="size-3.5 text-destructive" />
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full border-dashed gap-1"
+              onClick={() => setAddingType("exercise")}
+            >
+              <Plus className="size-3.5" />
+              添加课后习题
+            </Button>
+          )}
+        </div>
+      </section>
       <div className="h-16" />
     </div>
   );

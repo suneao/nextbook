@@ -19,6 +19,7 @@ export type Textbook = {
   fileUrl: string;
   totalPages: number;
   fileData?: string;
+  fileSize?: number;
   pageMap?: ChapterPageRange[];
 };
 
@@ -52,6 +53,7 @@ export type ExercisePDF = {
   name: string;
   fileUrl: string;
   fileData?: string;
+  fileSize?: number;
 };
 
 export type ExamPDF = {
@@ -60,6 +62,7 @@ export type ExamPDF = {
   fileUrl: string;
   year?: string;
   fileData?: string;
+  fileSize?: number;
 };
 
 export type Chapter = {
@@ -89,6 +92,8 @@ export type AIModel = {
   modelId: string;
   apiKey: string;
   apiUrl: string;
+  maxContextTokens: number;
+  maxOutputTokens: number;
 };
 
 export type AppSettings = {

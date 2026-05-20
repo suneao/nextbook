@@ -12,6 +12,8 @@ import {
   Monitor,
   Eye,
   EyeOff,
+  Download,
+  Upload,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -37,6 +39,7 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { useTheme } from "@/components/theme-provider";
+import { useLocale } from "@/lib/i18n";
 
 // ── Constants ──────────────────────────────────────────────────────────
 
@@ -90,6 +93,7 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [loaded, setLoaded] = useState(false);
   const { setTheme } = useTheme();
+  const { setLocale } = useLocale();
 
   useEffect(() => {
     const stored = loadSettings();
@@ -125,6 +129,8 @@ export default function SettingsPage() {
     modelId: "",
     apiKey: "",
     apiUrl: "",
+    maxContextTokens: 16000,
+    maxOutputTokens: 16384,
   });
   const [showApiKey, setShowApiKey] = useState(false);
 
@@ -135,6 +141,8 @@ export default function SettingsPage() {
       modelId: "",
       apiKey: "",
       apiUrl: "",
+      maxContextTokens: 16000,
+      maxOutputTokens: 16384,
     });
     setEditModelId(null);
     setShowApiKey(false);
@@ -148,6 +156,8 @@ export default function SettingsPage() {
       modelId: model.modelId,
       apiKey: model.apiKey,
       apiUrl: model.apiUrl,
+      maxContextTokens: model.maxContextTokens ?? 16000,
+      maxOutputTokens: model.maxOutputTokens ?? 16384,
     });
     setEditModelId(model.id);
     setShowApiKey(false);
@@ -179,6 +189,8 @@ export default function SettingsPage() {
                 modelId: modelForm.modelId,
                 apiKey: modelForm.apiKey,
                 apiUrl: modelForm.apiUrl,
+                maxContextTokens: modelForm.maxContextTokens,
+                maxOutputTokens: modelForm.maxOutputTokens,
               }
             : m,
         ),
@@ -191,6 +203,8 @@ export default function SettingsPage() {
         modelId: modelForm.modelId.trim(),
         apiKey: modelForm.apiKey.trim(),
         apiUrl: modelForm.apiUrl.trim(),
+        maxContextTokens: modelForm.maxContextTokens,
+        maxOutputTokens: modelForm.maxOutputTokens,
       };
       update({ models: [...settings.models, newModel] });
     }
@@ -201,16 +215,71 @@ export default function SettingsPage() {
     update({ models: settings.models.filter((m) => m.id !== id) });
   };
 
+  const handleExportSettings = () => {
+    try {
+      const json = JSON.stringify(settings, null, 2);
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "nextbook-settings.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert("导出失败: " + (e instanceof Error ? e.message : String(e)));
+    }
+  };
+
+  const handleImportSettings = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json";
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const imported = JSON.parse(text);
+        const merged: AppSettings = {
+          ...defaultSettings,
+          ...imported,
+          models: Array.isArray(imported.models) ? imported.models : [],
+        };
+        startTransition(() => {
+          setSettings(merged);
+          saveSettings(merged);
+          if (merged.theme) setTheme(merged.theme);
+        });
+        alert("设置导入成功！");
+      } catch (e) {
+        alert("导入失败: " + (e instanceof Error ? e.message : String(e)));
+      }
+    };
+    input.click();
+  };
+
   if (!loaded) return null;
 
   return (
     <div className="mx-auto max-w-2xl w-full px-4 py-6 space-y-8">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold">设置</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          管理应用偏好和AI模型配置
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">设置</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            管理应用偏好和AI模型配置
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handleImportSettings}>
+            <Upload className="size-4" />
+            导入
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleExportSettings}>
+            <Download className="size-4" />
+            导出
+          </Button>
+        </div>
       </div>
 
       {/* ── 1. 外观设置 ──────────────────────────────────────── */}
@@ -293,6 +362,10 @@ export default function SettingsPage() {
                     {model.apiUrl}
                   </p>
                 )}
+                <p className="text-xs text-muted-foreground/50 mt-0.5">
+                  上下文: {(model.maxContextTokens ?? 16000).toLocaleString()} |
+                  输出: {(model.maxOutputTokens ?? 16384).toLocaleString()}
+                </p>
               </div>
               <div className="flex items-center gap-1">
                 <Button
@@ -402,6 +475,40 @@ export default function SettingsPage() {
                   }
                 />
               </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    最大上下文
+                  </label>
+                  <Input
+                    type="number"
+                    placeholder="16000"
+                    value={modelForm.maxContextTokens}
+                    onChange={(e) =>
+                      setModelForm((f) => ({
+                        ...f,
+                        maxContextTokens: Number(e.target.value),
+                      }))
+                    }
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    最大输出Tokens
+                  </label>
+                  <Input
+                    type="number"
+                    placeholder="16384"
+                    value={modelForm.maxOutputTokens}
+                    onChange={(e) =>
+                      setModelForm((f) => ({
+                        ...f,
+                        maxOutputTokens: Number(e.target.value),
+                      }))
+                    }
+                  />
+                </div>
+              </div>
               <div className="flex justify-end gap-2">
                 <Button variant="outline" size="sm" onClick={cancelModelForm}>
                   取消
@@ -445,7 +552,11 @@ export default function SettingsPage() {
           <Select
             value={settings.language}
             onValueChange={(v) => {
-              if (v) update({ language: v as AppSettings["language"] });
+              if (v) {
+                const loc = v as AppSettings["language"];
+                update({ language: loc });
+                setLocale(loc);
+              }
             }}
           >
             <SelectTrigger className="w-full">

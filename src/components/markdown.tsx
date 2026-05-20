@@ -1,42 +1,34 @@
 "use client";
 
-import { useMemo, useEffect, useRef } from "react";
+import { useMemo } from "react";
 import katex from "katex";
 
-// ── Markdown Renderer ────────────────────────────────────────────────────
-
 function renderMarkdown(text: string): string {
-  let html = text
+  // Step 1: Extract and protect math formulas BEFORE HTML escaping
+  const mathBlocks: string[] = [];
+  const mathInlines: string[] = [];
+
+  let html = text;
+
+  // Protect block math: $$...$$
+  html = html.replace(/\$\$([\s\S]*?)\$\$/g, (_, formula) => {
+    mathBlocks.push(formula.trim());
+    return `%%MATHBLOCK${mathBlocks.length - 1}%%`;
+  });
+
+  // Protect inline math: $...$
+  html = html.replace(/\$(.+?)\$/g, (_, formula) => {
+    mathInlines.push(formula.trim());
+    return `%%MATHINLINE${mathInlines.length - 1}%%`;
+  });
+
+  // Step 2: HTML escape the non-math content
+  html = html
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 
-  // Block math: $$...$$
-  html = html.replace(/\$\$([\s\S]*?)\$\$/g, (_, formula) => {
-    try {
-      const rendered = katex.renderToString(formula.trim(), {
-        displayMode: true,
-        throwOnError: false,
-      });
-      return `<div class="my-3 flex justify-center overflow-x-auto">${rendered}</div>`;
-    } catch {
-      return `<div class="my-2 text-sm text-muted-foreground">$${formula.trim()}$</div>`;
-    }
-  });
-
-  // Inline math: $...$
-  html = html.replace(/\$(.+?)\$/g, (_, formula) => {
-    try {
-      return katex.renderToString(formula.trim(), {
-        displayMode: false,
-        throwOnError: false,
-      });
-    } catch {
-      return `$${formula.trim()}$`;
-    }
-  });
-
-  // Code blocks
+  // Step 3: Code blocks
   html = html.replace(
     /```(\w*)\n([\s\S]*?)```/g,
     '<pre class="bg-muted rounded-lg p-3 my-2 overflow-x-auto text-xs"><code>$2</code></pre>',
@@ -66,7 +58,7 @@ function renderMarkdown(text: string): string {
     '<h1 class="text-lg font-bold mt-4 mb-1">$1</h1>',
   );
 
-  // Unordered lists
+  // Lists
   html = html.replace(
     /^- (.+)$/gm,
     '<li class="ml-4 list-disc text-sm">$1</li>',
@@ -75,8 +67,6 @@ function renderMarkdown(text: string): string {
     /((?:<li[^>]*>.*?<\/li>\n?)+)/g,
     '<ul class="my-1 space-y-0.5">$1</ul>',
   );
-
-  // Ordered lists
   html = html.replace(
     /^\d+\. (.+)$/gm,
     '<li class="ml-4 list-decimal text-sm">$1</li>',
@@ -86,17 +76,16 @@ function renderMarkdown(text: string): string {
   html = html
     .split(/\n\n+/)
     .map((block) => {
-      const trimmed = block.trim();
+      const t = block.trim();
       if (
-        trimmed.startsWith("<h") ||
-        trimmed.startsWith("<pre") ||
-        trimmed.startsWith("<ul") ||
-        trimmed.startsWith("<li") ||
-        trimmed.startsWith('<div class="my-')
-      ) {
-        return trimmed;
-      }
-      if (trimmed) return `<p class="text-sm my-1">${trimmed}</p>`;
+        t.startsWith("<h") ||
+        t.startsWith("<pre") ||
+        t.startsWith("<ul") ||
+        t.startsWith("<li") ||
+        t.startsWith('<div class="my-')
+      )
+        return t;
+      if (t) return `<p class="text-sm my-1">${t}</p>`;
       return "";
     })
     .join("\n");
@@ -105,14 +94,33 @@ function renderMarkdown(text: string): string {
   html = html.replace(/<br>\s*(<\/?(?:h[1-3]|pre|ul|li|p|div))/g, "$1");
   html = html.replace(/(<\/?(?:h[1-3]|pre|ul|li|p|div)[^>]*>)\s*<br>/g, "$1");
 
+  // Step 4: Restore math formulas with KaTeX rendering
+  html = html.replace(/%%MATHBLOCK(\d+)%%/g, (_, i) => {
+    const formula = mathBlocks[parseInt(i)];
+    try {
+      return `<div class="my-3 flex justify-center overflow-x-auto">${katex.renderToString(formula, { displayMode: true, throwOnError: false })}</div>`;
+    } catch {
+      return `<div class="my-2 text-sm text-muted-foreground">$${formula}$</div>`;
+    }
+  });
+
+  html = html.replace(/%%MATHINLINE(\d+)%%/g, (_, i) => {
+    const formula = mathInlines[parseInt(i)];
+    try {
+      return katex.renderToString(formula, {
+        displayMode: false,
+        throwOnError: false,
+      });
+    } catch {
+      return `$${formula}$`;
+    }
+  });
+
   return html;
 }
 
-// ── Component ────────────────────────────────────────────────────────────
-
 export function Markdown({ content }: { content: string }) {
   const html = useMemo(() => renderMarkdown(content), [content]);
-
   return (
     <div className="max-w-none" dangerouslySetInnerHTML={{ __html: html }} />
   );

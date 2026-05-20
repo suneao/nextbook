@@ -22,7 +22,9 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { useLayout } from "./layout-client";
+import { useLocale } from "@/lib/i18n";
 import { type Project, defaultProjects } from "@/lib/study-data";
+import { loadAllProjects } from "@/lib/storage";
 
 interface Todo {
   id: string;
@@ -32,16 +34,9 @@ interface Todo {
 
 const DEFAULT_TODOS: Todo[] = [];
 const TODOS_KEY = "nextbook-todos";
-const PROJECTS_KEY = "nextbook-projects";
 
-function loadFromStorage<T>(key: string, fallback: T): T {
-  if (typeof window === "undefined") return fallback;
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
-  } catch {
-    return fallback;
-  }
+async function loadFromIndexedDB() {
+  return await loadAllProjects();
 }
 
 function projectProgress(p: Project) {
@@ -56,17 +51,20 @@ function projectProgress(p: Project) {
 }
 
 export default function DashboardPage() {
+  const { t } = useLocale();
   const { setAiPanelOpen } = useLayout();
   const [projects, setProjects] = useState<Project[]>(defaultProjects);
+  const [pageLoaded, setPageLoaded] = useState(false);
   const [todos, setTodos] = useState<Todo[]>(DEFAULT_TODOS);
-  const [newTodo, setNewTodo] = useState("");
 
   useEffect(() => {
-    setProjects(loadFromStorage(PROJECTS_KEY, defaultProjects));
+    const raw = localStorage.getItem(TODOS_KEY);
+    if (raw) setTodos(JSON.parse(raw));
   }, []);
-  useEffect(() => {
-    setTodos(loadFromStorage(TODOS_KEY, DEFAULT_TODOS));
-  }, []);
+  const [newTodo, setNewTodo] = useState("");
+
+  useEffect(() => { loadFromIndexedDB().then(data => { setProjects(data || defaultProjects); setPageLoaded(true); }); }, []);
+  
   useEffect(() => {
     if (typeof window !== "undefined")
       localStorage.setItem(TODOS_KEY, JSON.stringify(todos));
@@ -111,7 +109,18 @@ export default function DashboardPage() {
 
   return (
     <div className="h-[calc(100vh-3.5rem)] overflow-y-auto bg-gradient-to-b from-background to-muted/20">
-      <div className="max-w-5xl mx-auto px-6 md:px-8 lg:px-10 py-8 space-y-8">
+      {!pageLoaded ? (
+        <div className="max-w-5xl mx-auto px-6 md:px-8 lg:px-10 py-8 space-y-8">
+          <div className="h-8 w-48 bg-muted rounded-lg animate-pulse" />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[1,2,3,4].map(i => <div key={i} className="h-24 bg-muted rounded-xl animate-pulse" />)}
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {[1,2].map(i => <div key={i} className="h-32 bg-muted rounded-xl animate-pulse" />)}
+          </div>
+        </div>
+      ) : (
+        <div className="max-w-5xl mx-auto px-6 md:px-8 lg:px-10 py-8 space-y-8">
         {/* Welcome */}
         <div className="flex items-end justify-between">
           <div>
@@ -140,22 +149,25 @@ export default function DashboardPage() {
               icon: FolderKanban,
               val: stats.projects,
               sub: "个项目",
-              
-              bg: "bg-blue-500/10 dark:bg-blue-400/10", icn: "text-blue-600 dark:text-blue-400",
+
+              bg: "bg-blue-500/10 dark:bg-blue-400/10",
+              icn: "text-blue-600 dark:text-blue-400",
             },
             {
               icon: Layers,
               val: stats.chapters,
               sub: "个章节",
-              
-              bg: "bg-violet-500/10 dark:bg-violet-400/10", icn: "text-violet-600 dark:text-violet-400",
+
+              bg: "bg-violet-500/10 dark:bg-violet-400/10",
+              icn: "text-violet-600 dark:text-violet-400",
             },
             {
               icon: CheckCircle2,
               val: `${stats.done}/${stats.total}`,
               sub: "节已完成",
-              
-              bg: "bg-emerald-500/10 dark:bg-emerald-400/10", icn: "text-emerald-600 dark:text-emerald-400",
+
+              bg: "bg-emerald-500/10 dark:bg-emerald-400/10",
+              icn: "text-emerald-600 dark:text-emerald-400",
             },
           ].map((s) => (
             <Card key={s.sub} className="overflow-hidden border-none shadow-sm">
@@ -190,7 +202,7 @@ export default function DashboardPage() {
           {/* Projects */}
           <section className="lg:col-span-3 space-y-3">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">最近项目</h2>
+              <h2 className="text-lg font-semibold">{t("dashboard.recentProjects")}</h2>
               <Link href="/projects">
                 <Button variant="ghost" size="sm">
                   全部
@@ -376,6 +388,7 @@ export default function DashboardPage() {
           </section>
         </div>
       </div>
+      )}
     </div>
   );
 }
