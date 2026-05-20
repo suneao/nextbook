@@ -240,9 +240,9 @@ export default function ProjectsPage() {
     [editProject],
   );
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (!confirm(t("dialog.deleteProject"))) return;
-    deleteProjectStorage(id);
+    await deleteProjectStorage(id);
     setProjects((prev) => prev.filter((p) => p.id !== id));
   };
 

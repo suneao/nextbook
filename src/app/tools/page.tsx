@@ -49,9 +49,9 @@ const tools = [
 ];
 
 const categories = [
-  { key: "all", label: "全部", icon: Wrench },
-  { key: "ai", label: "AI 工具", icon: Sparkles },
-  { key: "education", label: "教育", icon: GraduationCap },
+  { key: "all", labelKey: "tools.all", icon: Wrench },
+  { key: "ai", labelKey: "tools.ai", icon: Sparkles },
+  { key: "education", labelKey: "tools.education", icon: GraduationCap },
 ];
 
 export default function ToolsPage() {
@@ -86,7 +86,9 @@ export default function ToolsPage() {
             </div>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Star className="size-3.5 text-amber-500 fill-amber-500" />
-              <span>{tools.length} 个工具</span>
+              <span>
+                {tools.length} {t("tools.count")}
+              </span>
             </div>
           </div>
 
@@ -96,7 +98,7 @@ export default function ToolsPage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
                 className="pl-9 h-9"
-                placeholder="搜索工具..."
+                placeholder={t("tools.search")}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -115,7 +117,7 @@ export default function ToolsPage() {
                     }`}
                   >
                     <Icon className="size-3.5" />
-                    {cat.label}
+                    {t(cat.labelKey)}
                   </button>
                 );
               })}
@@ -127,7 +129,9 @@ export default function ToolsPage() {
         {filtered.length === 0 ? (
           <div className="text-center py-16">
             <Search className="size-10 text-muted-foreground/30 mx-auto mb-3" />
-            <p className="text-sm text-muted-foreground">没有找到匹配的工具</p>
+            <p className="text-sm text-muted-foreground">
+              {t("tools.noMatch")}
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

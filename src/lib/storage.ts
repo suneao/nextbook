@@ -143,17 +143,22 @@ export async function getProjectStorageDetails(): Promise<
     for (const { id, name } of idx) {
       const projKey = "project-" + id;
       const raw = await loadData(projKey);
-      const sizeMB = raw
-        ? Math.round(
-            (new TextEncoder().encode(raw).length / (1024 * 1024)) * 100,
-          ) / 100
-        : 0;
-      let files: StoredFile[] = [];
-      if (raw) {
-        try {
-          files = collectFiles(JSON.parse(raw));
-        } catch {}
+      if (!raw) {
+        // Clean up orphaned index entry
+        const cleanIdx = idx.filter((x: { id: string }) => x.id !== id);
+        if (cleanIdx.length < idx.length) {
+          await saveData(PROJECTS_KEY, JSON.stringify(cleanIdx));
+        }
+        continue;
       }
+      const sizeMB =
+        Math.round(
+          (new TextEncoder().encode(raw).length / (1024 * 1024)) * 100,
+        ) / 100;
+      let files: StoredFile[] = [];
+      try {
+        files = collectFiles(JSON.parse(raw));
+      } catch {}
       result.push({ id, name, sizeMB, files });
     }
     return result;

@@ -7,18 +7,20 @@ import {
   FolderKanban,
   CheckCircle2,
   Circle,
-  BarChart3,
   Plus,
   Trash2,
   ArrowRight,
   Layers,
   ListTodo,
   Sparkles,
+  TrendingUp,
+  Clock,
+  Zap,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { useLayout } from "./layout-client";
 import { useLocale } from "@/lib/i18n";
@@ -35,18 +37,20 @@ const DEFAULT_TODOS: Todo[] = [];
 const TODOS_KEY = "nextbook-todos";
 
 async function loadFromIndexedDB() {
-  return await loadAllProjects();
+  if (typeof window === "undefined") return defaultProjects;
+  return (await loadAllProjects()) || defaultProjects;
 }
 
 function projectProgress(p: Project) {
-  let done = 0,
-    total = 0;
-  for (const ch of p.chapters)
+  let total = 0,
+    done = 0;
+  for (const ch of p.chapters) {
     for (const sc of ch.subChapters) {
       total++;
       if (sc.completed) done++;
     }
-  return { done, total, pct: total > 0 ? Math.round((done / total) * 100) : 0 };
+  }
+  return { total, done, pct: total > 0 ? Math.round((done / total) * 100) : 0 };
 }
 
 export default function DashboardPage() {
@@ -58,7 +62,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const raw = localStorage.getItem(TODOS_KEY);
-    if (raw) setTodos(JSON.parse(raw)); // eslint-disable-line react-hooks/set-state-in-effect
+    if (raw) setTodos(JSON.parse(raw));
   }, []);
   const [newTodo, setNewTodo] = useState("");
 
@@ -76,35 +80,58 @@ export default function DashboardPage() {
 
   const stats = useMemo(() => {
     let ch = 0,
-      done = 0,
-      total = 0;
+      done = 0;
     for (const p of projects) {
       ch += p.chapters.length;
       for (const c of p.chapters)
-        for (const sc of c.subChapters) {
-          total++;
-          if (sc.completed) done++;
+        for (const s of c.subChapters) {
+          if (s.completed) done++;
         }
     }
     return {
       projects: projects.length,
       chapters: ch,
       done,
-      total,
-      pct: total > 0 ? Math.round((done / total) * 100) : 0,
+      total: projects.reduce(
+        (a, p) => a + p.chapters.reduce((b, c) => b + c.subChapters.length, 0),
+        0,
+      ),
+      pct: projects.length
+        ? Math.round(
+            (projects.reduce(
+              (a, p) =>
+                a +
+                p.chapters.reduce(
+                  (b, c) => b + c.subChapters.filter((s) => s.completed).length,
+                  0,
+                ),
+              0,
+            ) /
+              Math.max(
+                1,
+                projects.reduce(
+                  (a, p) =>
+                    a +
+                    p.chapters.reduce((b, c) => b + c.subChapters.length, 0),
+                  0,
+                ),
+              )) *
+              100,
+          )
+        : 0,
     };
   }, [projects]);
 
   const doneTodos = todos.filter((t) => t.completed).length;
 
   const addTodo = () => {
-    const t = newTodo.trim();
-    if (!t) return;
+    const tx = newTodo.trim();
+    if (!tx) return;
     setTodos((p) => [
       ...p,
       {
         id: crypto.randomUUID?.() ?? String(Date.now()),
-        text: t,
+        text: tx,
         completed: false,
       },
     ]);
@@ -112,81 +139,101 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="h-[calc(100vh-3.5rem)] overflow-y-auto bg-gradient-to-b from-background to-muted/20">
+    <div className="h-[calc(100vh-3.5rem)] overflow-y-auto">
       {!pageLoaded ? (
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 md:px-8 lg:px-10 py-8 space-y-8">
-          <div className="h-8 w-48 bg-muted rounded-lg animate-pulse" />
-          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
+        <div className="max-w-5xl mx-auto px-6 py-8 space-y-8">
+          <div className="h-10 w-56 bg-muted rounded-xl animate-pulse" />
+          <div className="grid grid-cols-4 gap-3">
             {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-24 bg-muted rounded-xl animate-pulse" />
+              <div
+                key={i}
+                className="h-28 bg-muted rounded-2xl animate-pulse"
+              />
             ))}
           </div>
-          <div className="grid gap-2 sm:gap-3 grid-cols-1 sm:grid-cols-2">
-            {[1, 2].map((i) => (
-              <div key={i} className="h-32 bg-muted rounded-xl animate-pulse" />
-            ))}
+          <div className="grid grid-cols-5 gap-6">
+            <div className="col-span-3 h-64 bg-muted rounded-2xl animate-pulse" />
+            <div className="col-span-2 h-64 bg-muted rounded-2xl animate-pulse" />
           </div>
         </div>
       ) : (
         <div className="max-w-5xl mx-auto px-6 md:px-8 lg:px-10 py-8 space-y-8">
-          {/* Welcome */}
-          <div className="flex items-end justify-between">
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
-                {t("nav.dashboard")}
-              </h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                {t("dashboard.welcome")}
-              </p>
+          {/* Welcome Banner */}
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/5 via-primary/10 to-violet-500/5 dark:from-primary/10 dark:via-primary/15 dark:to-violet-500/10 p-6 md:p-8">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-violet-500/10 to-transparent rounded-bl-3xl" />
+            <div className="relative flex items-end justify-between">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Zap className="size-4 text-primary" />
+                  <span className="text-xs font-medium text-primary uppercase tracking-wide">
+                    {new Date().toLocaleDateString(
+                      t("settings.language") === "en-US" ? "en-US" : "zh-CN",
+                      { weekday: "long", month: "long", day: "numeric" },
+                    )}
+                  </span>
+                </div>
+                <h1 className="text-3xl font-bold tracking-tight">
+                  {t("nav.dashboard")}
+                </h1>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {t("dashboard.welcome")}
+                </p>
+              </div>
+              <Button
+                className="gap-2 shadow-lg shadow-violet-500/20 hover:shadow-xl hover:shadow-violet-500/30 transition-shadow"
+                onClick={() => setAiPanelOpen(true)}
+              >
+                <Sparkles className="size-4" />
+                {t("dashboard.aiChat")}
+              </Button>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2 shadow-sm"
-              onClick={() => setAiPanelOpen(true)}
-            >
-              <Sparkles className="size-4 text-violet-500" />
-              {t("dashboard.aiChat")}
-            </Button>
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
               {
                 icon: FolderKanban,
                 val: stats.projects,
                 sub: t("dashboard.units.projects"),
-
-                bg: "bg-blue-500/10 dark:bg-blue-400/10",
-                icn: "text-blue-600 dark:text-blue-400",
+                color: "#3b82f6",
+                gradient: "from-blue-500/10 to-blue-600/5",
               },
               {
                 icon: Layers,
                 val: stats.chapters,
                 sub: t("dashboard.units.chapters"),
-
-                bg: "bg-violet-500/10 dark:bg-violet-400/10",
-                icn: "text-violet-600 dark:text-violet-400",
+                color: "#8b5cf6",
+                gradient: "from-violet-500/10 to-violet-600/5",
               },
               {
                 icon: CheckCircle2,
                 val: `${stats.done}/${stats.total}`,
                 sub: t("dashboard.units.completed"),
-
-                bg: "bg-emerald-500/10 dark:bg-emerald-400/10",
-                icn: "text-emerald-600 dark:text-emerald-400",
+                color: "#10b981",
+                gradient: "from-emerald-500/10 to-emerald-600/5",
+              },
+              {
+                icon: TrendingUp,
+                val: `${stats.pct}%`,
+                sub: t("dashboard.units.section"),
+                color: "#f59e0b",
+                gradient: "from-amber-500/10 to-amber-600/5",
               },
             ].map((s) => (
               <Card
                 key={s.sub}
-                className="overflow-hidden border-none shadow-sm"
+                className="group relative overflow-hidden border-none shadow-sm hover:shadow-md transition-all duration-300"
               >
-                <CardContent className="flex items-center gap-4 p-4">
+                <div
+                  className={`absolute inset-0 bg-gradient-to-br ${s.gradient} opacity-0 group-hover:opacity-100 transition-opacity`}
+                />
+                <CardContent className="relative flex items-center gap-4 p-4">
                   <div
-                    className={`flex size-11 shrink-0 items-center justify-center rounded-2xl ${s.bg}`}
+                    className="flex size-11 shrink-0 items-center justify-center rounded-2xl"
+                    style={{ backgroundColor: s.color + "14" }}
                   >
-                    <s.icon className={`size-5 ${s.icn}`} />
+                    <s.icon className="size-5" style={{ color: s.color }} />
                   </div>
                   <div className="min-w-0">
                     <p className="text-2xl font-bold tabular-nums">{s.val}</p>
@@ -195,31 +242,21 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
             ))}
-            <Card className="overflow-hidden border-none shadow-sm">
-              <CardContent className="flex flex-col justify-center gap-2.5 p-4 h-full">
-                <div className="flex items-center justify-between">
-                  <BarChart3 className="size-4 text-orange-500" />
-                  <span className="text-xl font-bold tabular-nums">
-                    {stats.pct}%
-                  </span>
-                </div>
-                <Progress value={stats.pct} className="h-2.5 rounded-full" />
-              </CardContent>
-            </Card>
           </div>
 
           {/* Two columns */}
-          <div className="grid gap-4 lg:gap-6 grid-cols-1 lg:grid-cols-5">
+          <div className="grid gap-6 lg:grid-cols-5">
             {/* Projects */}
-            <section className="lg:col-span-3 space-y-3">
+            <section className="lg:col-span-3 space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold">
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  <Clock className="size-4 text-muted-foreground" />
                   {t("dashboard.recentProjects")}
                 </h2>
                 <Link href="/projects">
-                  <Button variant="ghost" size="sm">
+                  <Button variant="ghost" size="sm" className="group">
                     {t("dashboard.viewAll")}
-                    <ArrowRight className="ml-1 size-4" />
+                    <ArrowRight className="ml-1 size-4 transition-transform group-hover:translate-x-0.5" />
                   </Button>
                 </Link>
               </div>
@@ -245,12 +282,12 @@ export default function DashboardPage() {
                     </CardContent>
                   </Card>
                 )}
-                {projects.map((p) => {
+                {projects.slice(0, 4).map((p) => {
                   const { pct, done, total } = projectProgress(p);
                   return (
                     <Link key={p.id} href={`/projects/${p.id}`}>
                       <Card
-                        className="group h-full transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer border-l-[3px] overflow-hidden"
+                        className="group h-full transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 cursor-pointer border-l-[3px] overflow-hidden"
                         style={{ borderLeftColor: p.color }}
                       >
                         <CardContent className="p-4 space-y-3">
@@ -311,9 +348,9 @@ export default function DashboardPage() {
                   },
                 ].map((a) => (
                   <Link key={a.title} href={a.href}>
-                    <Card className="border-dashed bg-muted/20 hover:bg-muted/40 transition-colors cursor-pointer shadow-none">
+                    <Card className="border-dashed bg-muted/20 hover:bg-muted/40 transition-colors cursor-pointer shadow-none group">
                       <CardContent className="flex items-center gap-3 p-4">
-                        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-background">
+                        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-background group-hover:bg-primary/10 transition-colors">
                           <a.icon className="size-4 text-primary" />
                         </div>
                         <div className="min-w-0 flex-1">
@@ -322,7 +359,7 @@ export default function DashboardPage() {
                             {a.desc}
                           </p>
                         </div>
-                        <ArrowRight className="size-4 text-muted-foreground/50 shrink-0" />
+                        <ArrowRight className="size-4 text-muted-foreground/50 shrink-0 transition-transform group-hover:translate-x-0.5" />
                       </CardContent>
                     </Card>
                   </Link>
@@ -331,10 +368,10 @@ export default function DashboardPage() {
             </section>
 
             {/* Todos */}
-            <section className="lg:col-span-2 space-y-3">
+            <section className="lg:col-span-2 space-y-4">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold flex items-center gap-2">
-                  <ListTodo className="size-5" />
+                  <ListTodo className="size-4 text-muted-foreground" />
                   {t("dashboard.todos")}
                 </h2>
                 <Badge variant="secondary" className="text-xs">
@@ -344,7 +381,7 @@ export default function DashboardPage() {
               <Card className="shadow-sm">
                 <CardContent className="p-4 space-y-1">
                   {todos.length === 0 && (
-                    <p className="text-sm text-muted-foreground text-center py-6">
+                    <p className="text-sm text-muted-foreground text-center py-8">
                       {t("dashboard.noTodos")}
                     </p>
                   )}
@@ -356,10 +393,10 @@ export default function DashboardPage() {
                       <button
                         onClick={() =>
                           setTodos((p) =>
-                            p.map((t) =>
-                              t.id === todo.id
-                                ? { ...t, completed: !t.completed }
-                                : t,
+                            p.map((x) =>
+                              x.id === todo.id
+                                ? { ...x, completed: !x.completed }
+                                : x,
                             ),
                           )
                         }
@@ -381,14 +418,14 @@ export default function DashboardPage() {
                         size="icon"
                         className="size-6 opacity-0 group-hover:opacity-100 shrink-0"
                         onClick={() =>
-                          setTodos((p) => p.filter((t) => t.id !== todo.id))
+                          setTodos((p) => p.filter((x) => x.id !== todo.id))
                         }
                       >
                         <Trash2 className="size-3.5 text-destructive/70" />
                       </Button>
                     </div>
                   ))}
-                  <div className="flex gap-2 pt-2">
+                  <div className="flex gap-2 pt-3">
                     <Input
                       className="h-9 text-sm"
                       placeholder="添加待办..."

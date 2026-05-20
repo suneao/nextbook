@@ -458,7 +458,7 @@ export default function SettingsPage() {
                   className="flex-1"
                 >
                   <Icon className="size-4" />
-                  {opt.label}
+                  {t(`settings.${opt.value}`)}
                 </Button>
               );
             })}
@@ -520,8 +520,10 @@ export default function SettingsPage() {
                   </p>
                 )}
                 <p className="text-xs text-muted-foreground/50 mt-0.5">
-                  上下文: {(model.maxContextTokens ?? 16000).toLocaleString()} |
-                  输出: {(model.maxOutputTokens ?? 16384).toLocaleString()}
+                  {t("common.maxContext")}:{" "}
+                  {(model.maxContextTokens ?? 16000).toLocaleString()} |
+                  {t("common.maxOutput")}:{" "}
+                  {(model.maxOutputTokens ?? 16384).toLocaleString()}
                 </p>
               </div>
               <div className="flex items-center gap-1">

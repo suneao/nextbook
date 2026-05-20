@@ -71,6 +71,10 @@ import {
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
+function isTextFile(name: string) {
+  return /\.(txt|md|html|htm)$/i.test(name);
+}
+
 async function loadProjects(): Promise<Project[]> {
   if (typeof window === "undefined") return defaultProjects;
   return await loadAllProjects();
@@ -89,7 +93,29 @@ function readFileAsBase64(file: File): Promise<string> {
   });
 }
 
-function dataUrlToBlobUrl(dataUrl: string): string {
+function readFileAsText(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsText(file);
+  });
+}
+
+function dataUrlToBlobUrl(dataUrl: string, fileName?: string): string {
+  // Handle plain text content (not a data URL)
+  if (!dataUrl.startsWith("data:")) {
+    const ext = (fileName || "").split(".").pop()?.toLowerCase() || "txt";
+    const mimeMap: Record<string, string> = {
+      md: "text/markdown",
+      html: "text/html",
+      htm: "text/html",
+      txt: "text/plain",
+    };
+    return URL.createObjectURL(
+      new Blob([dataUrl], { type: mimeMap[ext] || "text/plain" }),
+    );
+  }
   try {
     const parts = dataUrl.split(",");
     if (parts.length < 2) return dataUrl;
@@ -126,6 +152,7 @@ export default function ProjectDetailClient() {
     data: string;
     name: string;
     blobUrl?: string;
+    isText?: boolean;
   } | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(280);
   const sidebarRef = useRef<HTMLDivElement>(null);
@@ -303,13 +330,20 @@ export default function ProjectDetailClient() {
       }
       setUploading(true);
       try {
-        const base64 = await readFileAsBase64(file);
+        let fileData: string;
+        if (isTextFile(file.name)) {
+          fileData = await readFileAsText(file);
+        } else {
+          fileData = await readFileAsBase64(file);
+        }
+        const ext = file.name.split(".").pop()?.toLowerCase() || "";
         const newItem = {
           id: `${type}-${Date.now()}`,
           name: file.name,
           fileUrl: "#",
-          fileData: base64,
+          fileData,
           fileSize: file.size,
+          fileType: ext,
           ...(type === "textbook" ? { totalPages: 0 } : {}),
         };
 
@@ -618,7 +652,7 @@ export default function ProjectDetailClient() {
       <input
         ref={textbookInputRef}
         type="file"
-        accept=".pdf"
+        accept=".pdf,.txt,.md,.html,.htm,.docx,.pptx,.xlsx,.doc,.ppt,.xls"
         multiple
         className="hidden"
         onChange={(e) => {
@@ -632,7 +666,7 @@ export default function ProjectDetailClient() {
       <input
         ref={exerciseInputRef}
         type="file"
-        accept=".pdf"
+        accept=".pdf,.txt,.md,.html,.htm,.docx,.pptx,.xlsx,.doc,.ppt,.xls"
         className="hidden"
         onChange={(e) => {
           for (const f of e.target.files ? Array.from(e.target.files) : [])
@@ -643,7 +677,7 @@ export default function ProjectDetailClient() {
       <input
         ref={examInputRef}
         type="file"
-        accept=".pdf"
+        accept=".pdf,.txt,.md,.html,.htm,.docx,.pptx,.xlsx,.doc,.ppt,.xls"
         className="hidden"
         onChange={(e) => {
           for (const f of e.target.files ? Array.from(e.target.files) : [])
@@ -801,7 +835,12 @@ export default function ProjectDetailClient() {
                 onPreviewFile={(data, name) =>
                   setFilePreview(
                     data
-                      ? { data, name, blobUrl: dataUrlToBlobUrl(data) }
+                      ? {
+                          data,
+                          name,
+                          blobUrl: dataUrlToBlobUrl(data, name),
+                          isText: !data.startsWith("data:"),
+                        }
                       : null,
                   )
                 }
@@ -819,7 +858,12 @@ export default function ProjectDetailClient() {
                 onPreviewFile={(data, name) =>
                   setFilePreview(
                     data
-                      ? { data, name, blobUrl: dataUrlToBlobUrl(data) }
+                      ? {
+                          data,
+                          name,
+                          blobUrl: dataUrlToBlobUrl(data, name),
+                          isText: !data.startsWith("data:"),
+                        }
                       : null,
                   )
                 }
@@ -837,7 +881,12 @@ export default function ProjectDetailClient() {
                 onPreviewFile={(data, name) =>
                   setFilePreview(
                     data
-                      ? { data, name, blobUrl: dataUrlToBlobUrl(data) }
+                      ? {
+                          data,
+                          name,
+                          blobUrl: dataUrlToBlobUrl(data, name),
+                          isText: !data.startsWith("data:"),
+                        }
                       : null,
                   )
                 }
@@ -896,11 +945,17 @@ export default function ProjectDetailClient() {
               </span>
             </div>
             <div className="flex-1 min-h-0">
-              <iframe
-                src={filePreview.blobUrl || filePreview.data}
-                className="w-full h-full border-0"
-                title={filePreview.name}
-              />
+              {filePreview.isText ? (
+                <pre className="w-full h-full overflow-auto p-4 text-sm font-mono whitespace-pre-wrap">
+                  {filePreview.data}
+                </pre>
+              ) : (
+                <iframe
+                  src={filePreview.blobUrl || filePreview.data}
+                  className="w-full h-full border-0"
+                  title={filePreview.name}
+                />
+              )}
             </div>
           </div>
         ) : (
