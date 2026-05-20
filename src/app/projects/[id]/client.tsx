@@ -223,16 +223,15 @@ export default function ProjectDetailClient() {
   const handleRegenerateSubChapter = useCallback(
     async (scId: string) => {
       if (!project || project.textbooks.length === 0) return;
-      const modelId = (() => {
+      const settings = (() => {
         try {
-          return (
-            JSON.parse(localStorage.getItem("nextbook-settings") || "{}")
-              .chapterModel || "gpt-4o"
-          );
+          return JSON.parse(localStorage.getItem("nextbook-settings") || "{}");
         } catch {
-          return "gpt-4o";
+          return {};
         }
       })();
+      const modelId = settings.chapterModel || "gpt-4o";
+      const language = settings.language || "zh-CN";
       const model = getModelConfig(modelId);
       if (!model?.apiKey) {
         toast("Please configure API Key first", "warning");
@@ -256,6 +255,8 @@ export default function ProjectDetailClient() {
           sc.title,
           modelId,
           regenInstructions,
+          undefined,
+          language,
         );
         updateProject({
           ...project,
@@ -415,13 +416,15 @@ export default function ProjectDetailClient() {
       );
       return;
     }
+    // Snapshot the project once — used for all saves during this run
+    const initialProject = project;
     const controller = new AbortController();
     abortRef.current = controller;
     setAnalyzing(true);
     setGeneratingToast(true);
     setAnalysisStatus(t("project.analyzingPdf"));
     try {
-      const tb = project.textbooks[0];
+      const tb = initialProject.textbooks[0];
       if (!tb.fileData) {
         toast("PDF data not found", "error");
         return;
@@ -429,31 +432,37 @@ export default function ProjectDetailClient() {
       const pdfText = await extractTextFromPDF(tb.fileData);
       if (controller.signal.aborted) return;
       setAnalysisStatus(t("project.analyzingStructure"));
-      const chapters = await analyzeChapters(
+      // chapters is a fresh array from the AI — we will build immutable updates
+      const rawChapters = await analyzeChapters(
         pdfText,
         chapterModelId,
         controller.signal,
+        settings.language,
       );
       if (controller.signal.aborted) return;
-      updateProject({ ...project, chapters });
+
+      // Working copy — rebuilt immutably after each subchapter
+      let chapters = rawChapters;
+      setProject({ ...initialProject, chapters });
+
+      let failedCount = 0;
       for (let ci = 0; ci < chapters.length; ci++) {
-        const chapter = chapters[ci];
         const chapterText = (
-          chapter.pageStart && chapter.pageEnd
+          chapters[ci].pageStart && chapters[ci].pageEnd
             ? extractPageRange(
                 pdfText,
-                chapter.pageStart,
-                chapter.pageEnd,
+                chapters[ci].pageStart!,
+                chapters[ci].pageEnd!,
                 tb.totalPages,
               )
             : pdfText
         ).slice(0, 12000);
-        for (let si = 0; si < chapter.subChapters.length; si++) {
+        for (let si = 0; si < chapters[ci].subChapters.length; si++) {
           if (controller.signal.aborted) {
             setAnalysisStatus(t("project.stopped"));
             return;
           }
-          const sc = chapter.subChapters[si];
+          const sc = chapters[ci].subChapters[si];
           setAnalysisStatus(
             t("project.extracting") +
               " (" +
@@ -470,33 +479,60 @@ export default function ProjectDetailClient() {
               chapterText,
               sc.title,
               chapterModelId,
+              controller.signal,
+              settings.language,
             );
             if (controller.signal.aborted) return;
-            sc.knowledgePoints = knowledge.knowledgePoints;
-            sc.examples = knowledge.examples;
-            sc.exercises = knowledge.exercises;
-            // Batch update every 2 sub-chapters to avoid excessive re-renders
-            if (
-              (ci * chapters[0]?.subChapters?.length || 1) + (si % 2) === 0 ||
-              ci === chapters.length - 1
-            ) {
-              startTransition(() =>
-                updateProject({ ...project, chapters: [...chapters] }),
-              );
-            }
-          } catch {
-            /* continue */
+            // Immutable update — build a new chapters array
+            const updatedSubChapter = {
+              ...sc,
+              knowledgePoints: knowledge.knowledgePoints,
+              examples: knowledge.examples,
+              exercises: knowledge.exercises,
+            };
+            const updatedSubChapters = [...chapters[ci].subChapters];
+            updatedSubChapters[si] = updatedSubChapter;
+            const updatedChapter = {
+              ...chapters[ci],
+              subChapters: updatedSubChapters,
+            };
+            const updatedChapters = [...chapters];
+            updatedChapters[ci] = updatedChapter;
+            chapters = updatedChapters;
+            // Update UI state after each subchapter so user sees progress
+            setProject({ ...initialProject, chapters });
+          } catch (e) {
+            if (controller.signal.aborted) return;
+            failedCount++;
+            console.warn(
+              "[chapter-ai] Failed to extract knowledge for subchapter:",
+              sc.title,
+              e,
+            );
           }
         }
       }
-      setAnalysisStatus("");
+      // Single final save to disk with fully-populated chapters
+      if (!controller.signal.aborted) {
+        await saveProject({ ...initialProject, chapters });
+      }
+      if (failedCount > 0) {
+        toast(
+          failedCount + t("project.sectionsFailedExtract") ||
+            failedCount + " section(s) failed to extract.",
+          "warning",
+        );
+      }
     } catch (e) {
       if (e instanceof Error && e.name === "AbortError") return;
       const msg = e instanceof Error ? e.message : String(e);
       toast("Analysis failed: " + msg, "error");
     } finally {
       setAnalyzing(false);
-      setAnalysisStatus("");
+      setGeneratingToast(false);
+      if (!controller.signal.aborted) {
+        setAnalysisStatus("");
+      }
       abortRef.current = null;
     }
   }, [project, updateProject]);
@@ -522,13 +558,31 @@ export default function ProjectDetailClient() {
       const tb = project.textbooks[0];
       if (!tb.fileData) return;
 
-      const chapter = project.chapters.find((ch) => ch.id === chapterId);
-      if (!chapter) return;
+      const chapterIndex = project.chapters.findIndex(
+        (ch) => ch.id === chapterId,
+      );
+      if (chapterIndex === -1) return;
 
+      // Snapshot project once
+      const initialProject = project;
+      const controller = new AbortController();
+      abortRef.current = controller;
       setAnalyzing(true);
       try {
         const pdfText = await extractTextFromPDF(tb.fileData);
-        for (const sc of chapter.subChapters) {
+        if (controller.signal.aborted) return;
+
+        // Build a new chapters array immutably
+        let chapters = initialProject.chapters;
+        let failedCount = 0;
+        const subChapters = chapters[chapterIndex].subChapters;
+
+        for (let si = 0; si < subChapters.length; si++) {
+          if (controller.signal.aborted) {
+            setAnalysisStatus(t("project.stopped"));
+            return;
+          }
+          const sc = subChapters[si];
           setAnalysisStatus(
             t("project.regenerateTitle") + ": " + sc.title + "...",
           );
@@ -537,14 +591,43 @@ export default function ProjectDetailClient() {
               pdfText,
               sc.title,
               modelId,
+              controller.signal,
+              settings.language,
             );
-            sc.knowledgePoints = knowledge.knowledgePoints;
-            sc.examples = knowledge.examples;
-            sc.exercises = knowledge.exercises;
-          } catch {}
+            if (controller.signal.aborted) return;
+            // Immutable update
+            const updatedSubChapters = [...chapters[chapterIndex].subChapters];
+            updatedSubChapters[si] = {
+              ...sc,
+              knowledgePoints: knowledge.knowledgePoints,
+              examples: knowledge.examples,
+              exercises: knowledge.exercises,
+            };
+            const updatedChapters = [...chapters];
+            updatedChapters[chapterIndex] = {
+              ...chapters[chapterIndex],
+              subChapters: updatedSubChapters,
+            };
+            chapters = updatedChapters;
+            setProject({ ...initialProject, chapters });
+          } catch (e) {
+            if (controller.signal.aborted) return;
+            failedCount++;
+            console.warn(
+              "[chapter-ai] Failed to regenerate subchapter:",
+              sc.title,
+              e,
+            );
+          }
         }
-        updateProject({ ...project, chapters: [...project.chapters] });
+        if (failedCount > 0) {
+          toast(failedCount + " section(s) failed to regenerate.", "warning");
+        }
+        if (!controller.signal.aborted) {
+          await saveProject({ ...initialProject, chapters });
+        }
       } catch (e) {
+        if (e instanceof Error && e.name === "AbortError") return;
         toast(
           "Regeneration failed: " +
             (e instanceof Error ? e.message : String(e)),
@@ -552,7 +635,10 @@ export default function ProjectDetailClient() {
         );
       } finally {
         setAnalyzing(false);
-        setAnalysisStatus("");
+        if (!controller.signal.aborted) {
+          setAnalysisStatus("");
+        }
+        abortRef.current = null;
       }
     },
     [project, updateProject],
@@ -605,6 +691,17 @@ export default function ProjectDetailClient() {
     updateProject({
       ...project,
       chapters: project.chapters.filter((ch) => ch.id !== chapterId),
+    });
+  };
+
+  const handleDeleteSubChapter = (scId: string) => {
+    if (!project || !confirm(t("dialog.deleteSubChapter"))) return;
+    updateProject({
+      ...project,
+      chapters: project.chapters.map((ch) => ({
+        ...ch,
+        subChapters: ch.subChapters.filter((sc) => sc.id !== scId),
+      })),
     });
   };
 
@@ -709,11 +806,32 @@ export default function ProjectDetailClient() {
             }}
           />
         )}
-        <div className="shrink-0 px-3 py-3 border-b">
+        <div className="shrink-0 px-4 py-3 border-b">
           <div className="flex items-center gap-2">
-            <span className="text-lg">{project.icon}</span>
+            <span className="text-2xl">{project.icon}</span>
             <div className="flex-1 min-w-0">
               <h2 className="text-sm font-semibold truncate">{project.name}</h2>
+              {(() => {
+                const totalSubs = project.chapters.reduce(
+                  (s, ch) => s + ch.subChapters.length,
+                  0,
+                );
+                const completedSubs = project.chapters.reduce(
+                  (s, ch) =>
+                    s + ch.subChapters.filter((sc) => sc.completed).length,
+                  0,
+                );
+                return totalSubs > 0 ? (
+                  <div className="mt-1.5 h-1 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className="h-full bg-emerald-400 transition-all rounded-full"
+                      style={{
+                        width: `${Math.round((completedSubs / totalSubs) * 100)}%`,
+                      }}
+                    />
+                  </div>
+                ) : null;
+              })()}
             </div>
             <Button
               variant="ghost"
@@ -729,7 +847,7 @@ export default function ProjectDetailClient() {
           <div className="p-2 space-y-3">
             {/* Chapter Tree */}
             <div>
-              <div className="flex items-center justify-between px-2 mb-1">
+              <div className="flex items-center justify-between px-3 mb-2 mt-1">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   {t("project.chapters")}
                 </p>
@@ -792,7 +910,7 @@ export default function ProjectDetailClient() {
                   </Button>
                 </div>
               )}
-              <div className="space-y-0.5">
+              <div className="space-y-1">
                 {project.chapters.map((chapter) => (
                   <ChapterTreeNode
                     key={chapter.id}
@@ -810,6 +928,7 @@ export default function ProjectDetailClient() {
                     }}
                     onDeleteChapter={handleDeleteChapter}
                     onRegenerateChapter={handleRegenerateChapter}
+                    onDeleteSubChapter={handleDeleteSubChapter}
                   />
                 ))}
               </div>
@@ -1107,6 +1226,7 @@ function ChapterTreeNode({
   onCancelAddSubChapter,
   onDeleteChapter,
   onRegenerateChapter,
+  onDeleteSubChapter,
 }: {
   chapter: Chapter;
   selectedSubChapterId: string | null;
@@ -1119,6 +1239,7 @@ function ChapterTreeNode({
   onCancelAddSubChapter: () => void;
   onDeleteChapter: (chId: string) => void;
   onRegenerateChapter?: (chId: string) => void;
+  onDeleteSubChapter?: (scId: string) => void;
 }) {
   const completedCount = chapter.subChapters.filter(
     (sc) => sc.completed,
@@ -1130,108 +1251,122 @@ function ChapterTreeNode({
 
   return (
     <Collapsible defaultOpen>
-      <div className="relative flex items-center gap-0.5 rounded-md px-2 py-1 group hover:bg-muted/50 transition-colors">
-        <CollapsibleTrigger className="flex flex-1 items-center gap-1.5 text-sm font-medium min-w-0">
+      <div className="flex items-center gap-0.5 rounded-lg px-2 py-1.5 group hover:bg-muted/50 transition-colors">
+        <CollapsibleTrigger className="flex flex-1 items-center gap-1.5 text-sm font-semibold min-w-0">
           <ChevronDown className="size-4 text-muted-foreground shrink-0 transition-transform group-aria-expanded:rotate-180" />
-          <span
-            className="shrink-0"
-            title={
-              isNative ? ct("project.nativeDesc") : ct("project.customDesc")
-            }
-          >
-            {isNative ? "📖" : "✏️"}
-          </span>
           <span className="flex-1 text-left truncate">{chapter.title}</span>
-          <Badge
-            variant="outline"
-            className={cn(
-              "shrink-0 text-xs h-4 px-1 font-normal",
-              isNative
-                ? "border-blue-300 text-blue-600"
-                : "border-gray-300 text-gray-500",
-            )}
-          >
-            {isNative ? ct("project.native") : ct("project.custom")}
-          </Badge>
         </CollapsibleTrigger>
-        {/* Spacer so the count clears the absolutely-positioned action buttons */}
-        <span className="w-14 shrink-0" />
-        {totalCount > 0 && (
-          <span className="text-xs text-muted-foreground shrink-0">
-            {completedCount}/{totalCount}
-          </span>
-        )}
-        {/* Action buttons — absolutely positioned to avoid flex stacking */}
-        <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-          {isNative && onRegenerateChapter && (
+        {/* Right-side area: badge+count ↔ action buttons swap on hover */}
+        <div className="relative shrink-0 flex items-center">
+          {/* Badge + Count — visible by default, hidden on hover */}
+          <div className="flex items-center gap-1 group-hover:opacity-0 transition-opacity">
+            <Badge
+              variant="outline"
+              className={cn(
+                "shrink-0 text-xs h-4 px-1 font-normal",
+                isNative
+                  ? "border-blue-300 text-blue-600"
+                  : "border-gray-300 text-gray-500",
+              )}
+            >
+              {isNative ? ct("project.native") : ct("project.custom")}
+            </Badge>
+            {totalCount > 0 && (
+              <span className="text-xs text-muted-foreground shrink-0">
+                {completedCount}/{totalCount}
+              </span>
+            )}
+          </div>
+          {/* Action buttons — hidden by default, visible on hover (overlays the same spot) */}
+          <div className="absolute inset-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            {isNative && onRegenerateChapter && (
+              <button
+                type="button"
+                className="size-5 flex items-center justify-center rounded hover:bg-muted"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRegenerateChapter(chapter.id);
+                }}
+                title={ct("project.regenerateTitle")}
+              >
+                <RotateCw className="size-3.5" />
+              </button>
+            )}
             <button
               type="button"
               className="size-5 flex items-center justify-center rounded hover:bg-muted"
               onClick={(e) => {
                 e.stopPropagation();
-                onRegenerateChapter(chapter.id);
+                onAddSubChapter(chapter.id);
               }}
-              title={ct("project.regenerateTitle")}
+              title={ct("project.addSubChapterTitle")}
             >
-              <RotateCw className="size-3.5" />
+              <Plus className="size-3.5" />
             </button>
-          )}
-          <button
-            type="button"
-            className="size-5 flex items-center justify-center rounded hover:bg-muted"
-            onClick={(e) => {
-              e.stopPropagation();
-              onAddSubChapter(chapter.id);
-            }}
-            title={ct("project.addSubChapterTitle")}
-          >
-            <Plus className="size-3.5" />
-          </button>
-          <button
-            type="button"
-            className="size-5 flex items-center justify-center rounded hover:bg-muted"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDeleteChapter(chapter.id);
-            }}
-            title={ct("project.deleteChapterTitle")}
-          >
-            <Trash2 className="size-3.5 text-destructive" />
-          </button>
+            <button
+              type="button"
+              className="size-5 flex items-center justify-center rounded hover:bg-muted"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDeleteChapter(chapter.id);
+              }}
+              title={ct("project.deleteChapterTitle")}
+            >
+              <Trash2 className="size-3.5 text-destructive" />
+            </button>
+          </div>
         </div>
       </div>
+      {totalCount > 0 && (
+        <div className="mx-2 mt-0.5 h-0.5 rounded-full bg-muted overflow-hidden">
+          <div
+            className="h-full bg-emerald-400 transition-all rounded-full"
+            style={{
+              width: `${Math.round((completedCount / totalCount) * 100)}%`,
+            }}
+          />
+        </div>
+      )}
       <CollapsibleContent>
-        <div className="ml-4 space-y-0.5 mt-0.5">
-          {chapter.subChapters.map((sc) => (
-            <button
-              key={sc.id}
-              type="button"
-              className={cn(
-                "flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-sm transition-colors text-left",
-                selectedSubChapterId === sc.id
-                  ? "bg-primary/10 text-primary font-medium"
-                  : "hover:bg-muted/50 text-muted-foreground",
-              )}
-              onClick={() => onSelect(sc.id)}
-            >
-              {sc.completed ? (
-                <CheckCircle2 className="size-4 text-emerald-500 shrink-0" />
-              ) : (
-                <Circle className="size-4 shrink-0" />
-              )}
-              <span className="truncate">{sc.title}</span>
-              {sc.completed && (
-                <Badge
-                  variant="outline"
-                  className="ml-auto shrink-0 text-xs h-5 px-1"
-                >
-                  {ct("project.completed")}
-                </Badge>
-              )}
-            </button>
-          ))}
+        <div className="mt-0.5">
+          <div className="border-l border-border/60 ml-5 pl-1 space-y-0.5">
+            {chapter.subChapters.map((sc) => (
+              <button
+                key={sc.id}
+                type="button"
+                className={cn(
+                  "flex w-full items-center gap-1.5 rounded-md px-2 py-2 text-[13px] transition-colors text-left group/sc",
+                  selectedSubChapterId === sc.id
+                    ? "bg-primary/10 text-primary font-medium shadow-sm border border-primary/20"
+                    : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                )}
+                onClick={() => onSelect(sc.id)}
+              >
+                {sc.completed ? (
+                  <CheckCircle2 className="size-4 text-emerald-500 shrink-0" />
+                ) : (
+                  <Circle className="size-4 shrink-0 text-muted-foreground/40" />
+                )}
+                <span className="truncate flex-1">{sc.title}</span>
+                {onDeleteSubChapter && (
+                  <span
+                    className="size-5 flex items-center justify-center rounded hover:bg-red-100 dark:hover:bg-red-900/20 shrink-0 opacity-0 group-hover/sc:opacity-100 transition-opacity ml-1"
+                    title={
+                      ct("project.deleteSubChapterTitle") || "Delete section"
+                    }
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteSubChapter(sc.id);
+                    }}
+                  >
+                    <X className="size-3 text-destructive" />
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
           {addingSubToChapterId === chapter.id && (
-            <div className="flex gap-1 ml-4 mt-1">
+            <div className="flex gap-1 ml-5 mt-1">
               <Input
                 className="h-6 text-xs"
                 placeholder={ct("project.subChapterPlaceholder")}
@@ -1358,16 +1493,30 @@ function StudyUnitViewer({
   };
 
   return (
-    <div className="max-w-3xl mx-auto px-6 py-6 space-y-8">
+    <div className="max-w-3xl mx-auto px-8 py-8 space-y-10">
+      {/* ── Header ── */}
       <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">{subChapter.title}</h1>
-          <p className="text-xs text-muted-foreground mt-1">
-            {subChapter.knowledgePoints.length}
-            {tv("project.knowledgePoints")} · {subChapter.examples.length}
-            {tv("project.examples")} · {subChapter.exercises.length}
-            {tv("project.exercisesSection")}`
-          </p>
+        <div className="space-y-2">
+          <h1 className="text-3xl font-bold leading-snug">
+            <Markdown content={subChapter.title} inline />
+          </h1>
+          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <BookOpen className="size-3.5" />
+              {subChapter.knowledgePoints.length}{" "}
+              {tv("project.knowledgePoints")}
+            </span>
+            <span className="text-border">·</span>
+            <span className="flex items-center gap-1">
+              <FileQuestion className="size-3.5" />
+              {subChapter.examples.length} {tv("project.examples")}
+            </span>
+            <span className="text-border">·</span>
+            <span className="flex items-center gap-1">
+              <GraduationCap className="size-3.5" />
+              {subChapter.exercises.length} {tv("project.exercisesSection")}
+            </span>
+          </div>
         </div>
         <Button
           variant={subChapter.completed ? "secondary" : "default"}
@@ -1380,17 +1529,26 @@ function StudyUnitViewer({
             : tv("project.markUndone")}
         </Button>
       </div>
-      <Separator />
-      <section>
-        <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-          <BookOpen className="size-5 text-primary" />
-          {tv("project.knowledgePoints")}
-        </h2>
-        <div className="space-y-6">
-          {subChapter.knowledgePoints.map((kp) => (
-            <div key={kp.id} className="rounded-lg border bg-card p-5 group">
+
+      {/* ── Knowledge Points ── */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2.5">
+          <div className="size-7 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+            <BookOpen className="size-4 text-primary" />
+          </div>
+          <h2 className="text-lg font-semibold">
+            {tv("project.knowledgePoints")}
+          </h2>
+          <div className="flex-1 h-px bg-border" />
+        </div>
+        <div className="space-y-4">
+          {subChapter.knowledgePoints.map((kp, kpIdx) => (
+            <div
+              key={kp.id}
+              className="group rounded-xl border bg-card shadow-sm overflow-hidden"
+            >
               {editingKpId === kp.id ? (
-                <div className="space-y-3">
+                <div className="p-5 space-y-3">
                   <Input
                     value={editKpTitle}
                     onChange={(e) => setEditKpTitle(e.target.value)}
@@ -1401,7 +1559,7 @@ function StudyUnitViewer({
                     value={editKpContent}
                     onChange={(e) => setEditKpContent(e.target.value)}
                     placeholder={tv("project.kpContentPlaceholder")}
-                    className="text-sm min-h-[120px]"
+                    className="text-sm min-h-30"
                   />
                   <div className="flex items-center gap-1">
                     <Button
@@ -1442,8 +1600,16 @@ function StudyUnitViewer({
                 </div>
               ) : (
                 <>
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-base font-semibold">{kp.title}</h3>
+                  {/* Card header */}
+                  <div className="flex items-center justify-between gap-2 px-5 py-3 border-b bg-muted/30">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="size-5 rounded-full bg-primary/15 flex items-center justify-center text-[10px] font-bold text-primary shrink-0">
+                        {kpIdx + 1}
+                      </span>
+                      <h3 className="text-base font-semibold truncate">
+                        {kp.title}
+                      </h3>
+                    </div>
                     <Button
                       size="icon"
                       variant="ghost"
@@ -1458,14 +1624,16 @@ function StudyUnitViewer({
                       <Pencil className="size-3" />
                     </Button>
                   </div>
-                  <Markdown content={kp.content} />
+                  {/* Card body */}
+                  <div className="px-5 py-4 text-base leading-relaxed">
+                    <Markdown content={kp.content} />
+                  </div>
                 </>
               )}
             </div>
           ))}
-          {/* Add new knowledge point form */}
           {addingType === "kp" ? (
-            <div className="rounded-lg border border-dashed border-primary/40 bg-primary/5 p-5 space-y-3">
+            <div className="rounded-xl border border-dashed border-primary/40 bg-primary/5 p-5 space-y-3">
               <Input
                 value={newKpTitle}
                 onChange={(e) => setNewKpTitle(e.target.value)}
@@ -1477,7 +1645,7 @@ function StudyUnitViewer({
                 value={newKpContent}
                 onChange={(e) => setNewKpContent(e.target.value)}
                 placeholder={tv("project.kpContentPlaceholder")}
-                className="text-sm min-h-[120px]"
+                className="text-sm min-h-30"
               />
               <div className="flex items-center gap-1">
                 <Button
@@ -1508,7 +1676,7 @@ function StudyUnitViewer({
             <Button
               variant="outline"
               size="sm"
-              className="w-full border-dashed gap-1"
+              className="w-full border-dashed gap-1.5 text-muted-foreground hover:text-foreground"
               onClick={() => setAddingType("kp")}
             >
               <Plus className="size-3.5" />
@@ -1517,28 +1685,33 @@ function StudyUnitViewer({
           )}
         </div>
       </section>
-      <section>
-        <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-          <FileQuestion className="size-5 text-amber-500" />
-          {tv("project.examples")}
-        </h2>
+
+      {/* ── Examples ── */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2.5">
+          <div className="size-7 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
+            <FileQuestion className="size-4 text-amber-500" />
+          </div>
+          <h2 className="text-lg font-semibold">{tv("project.examples")}</h2>
+          <div className="flex-1 h-px bg-border" />
+        </div>
         <div className="space-y-3">
-          {subChapter.examples.map((ex) => (
+          {subChapter.examples.map((ex, exIdx) => (
             <Collapsible key={ex.id}>
-              <div className="rounded-md border bg-card p-3 group">
+              <div className="group rounded-xl border bg-card shadow-sm overflow-hidden">
                 {editingExampleId === ex.id ? (
-                  <div className="space-y-3">
+                  <div className="p-4 space-y-3">
                     <Textarea
                       value={editExampleQuestion}
                       onChange={(e) => setEditExampleQuestion(e.target.value)}
                       placeholder={tv("project.exampleQuestion")}
-                      className="text-sm min-h-[60px]"
+                      className="text-sm min-h-15"
                     />
                     <Textarea
                       value={editExampleSolution}
                       onChange={(e) => setEditExampleSolution(e.target.value)}
                       placeholder={tv("project.exampleSolution")}
-                      className="text-sm min-h-[60px]"
+                      className="text-sm min-h-15"
                     />
                     <div className="flex items-center gap-1">
                       <Button
@@ -1578,17 +1751,21 @@ function StudyUnitViewer({
                   </div>
                 ) : (
                   <>
-                    <div className="flex w-full items-start gap-2 text-left">
-                      <CollapsibleTrigger className="flex flex-1 items-start gap-2 group/trigger">
-                        <span className="flex-1 text-base font-medium">
+                    {/* Question row */}
+                    <div className="flex items-start gap-0 border-b border-border/50 group/trigger">
+                      <span className="shrink-0 w-9 pt-4 text-center text-sm font-bold text-amber-500/80">
+                        Q{exIdx + 1}
+                      </span>
+                      <CollapsibleTrigger className="flex flex-1 items-start gap-2 px-3 py-3.5 text-left">
+                        <span className="flex-1 text-base leading-relaxed">
                           <Markdown content={ex.question} />
                         </span>
-                        <ChevronDown className="size-5 text-muted-foreground shrink-0 mt-0.5 transition-transform group-aria-expanded/trigger:rotate-180" />
+                        <ChevronDown className="size-4 text-muted-foreground shrink-0 mt-0.5 transition-transform group-aria-expanded/trigger:rotate-180" />
                       </CollapsibleTrigger>
                       <Button
                         size="icon"
                         variant="ghost"
-                        className="size-7 shrink-0 opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity"
+                        className="size-7 shrink-0 mt-1 mr-1 opacity-0 group-hover:opacity-100 transition-opacity"
                         onClick={() => {
                           setEditExampleQuestion(ex.question);
                           setEditExampleSolution(ex.solution);
@@ -1596,33 +1773,39 @@ function StudyUnitViewer({
                         }}
                         title={tv("common.edit")}
                       >
-                        <Pencil className="size-4" />
+                        <Pencil className="size-3.5" />
                       </Button>
                     </div>
+                    {/* Solution row */}
                     <CollapsibleContent>
-                      <Separator className="my-2" />
-                      <Markdown content={ex.solution} />
+                      <div className="flex items-start gap-0 bg-amber-500/5">
+                        <span className="shrink-0 w-8 pt-3.5 text-center text-xs font-bold text-amber-600/60">
+                          A
+                        </span>
+                        <div className="flex-1 px-3 py-3.5 text-base leading-relaxed border-l border-amber-500/20">
+                          <Markdown content={ex.solution} />
+                        </div>
+                      </div>
                     </CollapsibleContent>
                   </>
                 )}
               </div>
             </Collapsible>
           ))}
-          {/* Add new example form */}
           {addingType === "example" ? (
-            <div className="rounded-md border border-dashed border-amber-500/40 bg-amber-500/5 p-3 space-y-3">
+            <div className="rounded-xl border border-dashed border-amber-500/40 bg-amber-500/5 p-4 space-y-3">
               <Textarea
                 value={newExampleQuestion}
                 onChange={(e) => setNewExampleQuestion(e.target.value)}
                 placeholder={tv("project.newExampleQuestion")}
-                className="text-sm min-h-[60px]"
+                className="text-sm min-h-15"
                 autoFocus
               />
               <Textarea
                 value={newExampleSolution}
                 onChange={(e) => setNewExampleSolution(e.target.value)}
                 placeholder={tv("project.exampleSolution")}
-                className="text-sm min-h-[60px]"
+                className="text-sm min-h-15"
               />
               <div className="flex items-center gap-1">
                 <Button
@@ -1653,7 +1836,7 @@ function StudyUnitViewer({
             <Button
               variant="outline"
               size="sm"
-              className="w-full border-dashed gap-1"
+              className="w-full border-dashed gap-1.5 text-muted-foreground hover:text-foreground"
               onClick={() => setAddingType("example")}
             >
               <Plus className="size-3.5" />
@@ -1662,28 +1845,35 @@ function StudyUnitViewer({
           )}
         </div>
       </section>
-      <section>
-        <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-          <FileQuestion className="size-5 text-emerald-500" />
-          {tv("project.exercisesSection")}
-        </h2>
+
+      {/* ── Exercises ── */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2.5">
+          <div className="size-7 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
+            <GraduationCap className="size-4 text-emerald-600" />
+          </div>
+          <h2 className="text-lg font-semibold">
+            {tv("project.exercisesSection")}
+          </h2>
+          <div className="flex-1 h-px bg-border" />
+        </div>
         <div className="space-y-3">
           {subChapter.exercises.map((ex, idx) => (
             <Collapsible key={ex.id}>
-              <div className="rounded-md border bg-card p-3 group">
+              <div className="group rounded-xl border bg-card shadow-sm overflow-hidden">
                 {editingExerciseId === ex.id ? (
-                  <div className="space-y-3">
+                  <div className="p-4 space-y-3">
                     <Textarea
                       value={editExerciseQuestion}
                       onChange={(e) => setEditExerciseQuestion(e.target.value)}
                       placeholder={tv("project.exampleQuestion")}
-                      className="text-sm min-h-[60px]"
+                      className="text-sm min-h-15"
                     />
                     <Textarea
                       value={editExerciseSolution}
                       onChange={(e) => setEditExerciseSolution(e.target.value)}
                       placeholder={tv("project.exampleSolution")}
-                      className="text-sm min-h-[60px]"
+                      className="text-sm min-h-15"
                     />
                     <div className="flex items-center gap-1">
                       <Button
@@ -1723,20 +1913,21 @@ function StudyUnitViewer({
                   </div>
                 ) : (
                   <>
-                    <div className="flex w-full items-start gap-2 text-left">
-                      <CollapsibleTrigger className="flex flex-1 items-start gap-2 group/trigger">
-                        <span className="text-sm font-medium text-muted-foreground shrink-0 mt-0.5">
-                          {idx + 1}.
-                        </span>
-                        <span className="flex-1 text-base font-medium">
+                    {/* Question row */}
+                    <div className="flex items-start gap-0 border-b border-border/50 group/trigger">
+                      <span className="shrink-0 w-9 pt-4 text-center text-sm font-bold text-emerald-600/80">
+                        {idx + 1}
+                      </span>
+                      <CollapsibleTrigger className="flex flex-1 items-start gap-2 px-3 py-3.5 text-left">
+                        <span className="flex-1 text-base leading-relaxed">
                           <Markdown content={ex.question} />
                         </span>
-                        <ChevronDown className="size-5 text-muted-foreground shrink-0 mt-0.5 transition-transform group-aria-expanded/trigger:rotate-180" />
+                        <ChevronDown className="size-4 text-muted-foreground shrink-0 mt-0.5 transition-transform group-aria-expanded/trigger:rotate-180" />
                       </CollapsibleTrigger>
                       <Button
                         size="icon"
                         variant="ghost"
-                        className="size-7 shrink-0 opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity"
+                        className="size-7 shrink-0 mt-1 mr-1 opacity-0 group-hover:opacity-100 transition-opacity"
                         onClick={() => {
                           setEditExerciseQuestion(ex.question);
                           setEditExerciseSolution(ex.solution);
@@ -1744,33 +1935,39 @@ function StudyUnitViewer({
                         }}
                         title={tv("common.edit")}
                       >
-                        <Pencil className="size-4" />
+                        <Pencil className="size-3.5" />
                       </Button>
                     </div>
+                    {/* Solution row */}
                     <CollapsibleContent>
-                      <Separator className="my-2" />
-                      <Markdown content={ex.solution} />
+                      <div className="flex items-start gap-0 bg-emerald-500/5">
+                        <span className="shrink-0 w-8 pt-3.5 text-center text-xs font-bold text-emerald-600/60">
+                          解
+                        </span>
+                        <div className="flex-1 px-3 py-3.5 text-base leading-relaxed border-l border-emerald-500/20">
+                          <Markdown content={ex.solution} />
+                        </div>
+                      </div>
                     </CollapsibleContent>
                   </>
                 )}
               </div>
             </Collapsible>
           ))}
-          {/* Add new exercise form */}
           {addingType === "exercise" ? (
-            <div className="rounded-md border border-dashed border-emerald-500/40 bg-emerald-500/5 p-3 space-y-3">
+            <div className="rounded-xl border border-dashed border-emerald-500/40 bg-emerald-500/5 p-4 space-y-3">
               <Textarea
                 value={newExerciseQuestion}
                 onChange={(e) => setNewExerciseQuestion(e.target.value)}
                 placeholder={tv("project.newExerciseQuestion")}
-                className="text-sm min-h-[60px]"
+                className="text-sm min-h-15"
                 autoFocus
               />
               <Textarea
                 value={newExerciseSolution}
                 onChange={(e) => setNewExerciseSolution(e.target.value)}
                 placeholder={tv("project.exampleSolution")}
-                className="text-sm min-h-[60px]"
+                className="text-sm min-h-15"
               />
               <div className="flex items-center gap-1">
                 <Button
@@ -1801,7 +1998,7 @@ function StudyUnitViewer({
             <Button
               variant="outline"
               size="sm"
-              className="w-full border-dashed gap-1"
+              className="w-full border-dashed gap-1.5 text-muted-foreground hover:text-foreground"
               onClick={() => setAddingType("exercise")}
             >
               <Plus className="size-3.5" />

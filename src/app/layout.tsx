@@ -44,7 +44,7 @@ export default function RootLayout({
       )}
       suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col bg-background text-foreground">
+      <body className="h-full overflow-hidden flex flex-col bg-background text-foreground">
         <ThemeProvider defaultTheme="system">
           <LocaleProvider>
             <ToastProvider>

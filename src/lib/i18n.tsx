@@ -158,6 +158,7 @@ const dictionaries: Record<Locale, TranslationDict> = {
     "project.regenerateTitle": "重新生成",
     "project.addSubChapterTitle": "添加小节",
     "project.deleteChapterTitle": "删除章节",
+    "project.deleteSubChapterTitle": "删除小节",
     "project.subChapterPlaceholder": "小节标题...",
     "project.markUndone": "✓ 完成学习",
     "project.kpTitle": "标题",
@@ -173,6 +174,7 @@ const dictionaries: Record<Locale, TranslationDict> = {
 
     // Dialogs
     "dialog.deleteChapter": "确定删除此章节？",
+    "dialog.deleteSubChapter": "确定删除此小节？",
     "help.title": "使用教程",
     "help.subtitle": "快速了解 NextBook 的各项功能",
     "help.section.projects.title": "创建与管理项目",
@@ -383,6 +385,7 @@ const dictionaries: Record<Locale, TranslationDict> = {
     "project.regenerateTitle": "Regenerate",
     "project.addSubChapterTitle": "Add subsection",
     "project.deleteChapterTitle": "Delete chapter",
+    "project.deleteSubChapterTitle": "Delete section",
     "project.subChapterPlaceholder": "Subsection title...",
     "project.markUndone": "Mark complete",
     "project.kpTitle": "Title",
@@ -397,6 +400,7 @@ const dictionaries: Record<Locale, TranslationDict> = {
     "material.empty": "No",
 
     "dialog.deleteChapter": "Delete this chapter?",
+    "dialog.deleteSubChapter": "Delete this section?",
     "help.title": "User Guide",
     "help.subtitle": "Quick overview of NextBook features",
     "help.section.projects.title": "Create & Manage Projects",
@@ -623,6 +627,7 @@ const dictionaries: Record<Locale, TranslationDict> = {
     "project.regenerateTitle": "再生成",
     "project.addSubChapterTitle": "サブセクション追加",
     "project.deleteChapterTitle": "章を削除",
+    "project.deleteSubChapterTitle": "セクションを削除",
     "project.subChapterPlaceholder": "サブセクションタイトル...",
     "project.markUndone": "✓ 完了",
     "project.kpTitle": "タイトル",
@@ -637,6 +642,7 @@ const dictionaries: Record<Locale, TranslationDict> = {
     "material.empty": "なし",
 
     "dialog.deleteChapter": "この章を削除しますか？",
+    "dialog.deleteSubChapter": "このセクションを削除しますか？",
     "help.title": "使い方ガイド",
     "help.subtitle": "NextBookの機能概要",
     "help.section.projects.title": "プロジェクト作成と管理",

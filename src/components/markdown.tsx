@@ -119,8 +119,26 @@ function renderMarkdown(text: string): string {
   return html;
 }
 
-export function Markdown({ content }: { content: string }) {
-  const html = useMemo(() => renderMarkdown(content), [content]);
+export function Markdown({
+  content,
+  inline = false,
+}: {
+  content: string;
+  inline?: boolean;
+}) {
+  const html = useMemo(() => {
+    let result = renderMarkdown(content);
+    if (inline) {
+      // Strip wrapping <p> tags for inline usage (e.g. titles, badges)
+      result = result.replace(/^<p class="text-sm my-1">/, "");
+      result = result.replace(/<\/p>$/, "");
+    }
+    return result;
+  }, [content, inline]);
+
+  if (inline) {
+    return <span dangerouslySetInnerHTML={{ __html: html }} />;
+  }
   return (
     <div className="max-w-none" dangerouslySetInnerHTML={{ __html: html }} />
   );

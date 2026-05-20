@@ -6,8 +6,8 @@ import { BookOpen } from "lucide-react";
 
 export function AppNav() {
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="flex h-14 items-center justify-between px-4">
+    <header className="sticky top-0 z-50 w-full h-14 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="flex h-full items-center justify-between px-4">
         {/* Logo & Title */}
         <div className="flex items-center gap-3">
           <div className="flex size-9 items-center justify-center rounded-lg bg-primary">

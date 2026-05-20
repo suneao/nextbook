@@ -418,403 +418,414 @@ export default function SettingsPage() {
   if (!loaded) return null;
 
   return (
-    <div className="mx-auto max-w-2xl w-full px-3 sm:px-4 py-4 sm:py-6 space-y-6 sm:space-y-8">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-0 sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">{t("settings.title")}</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {t("settings.subtitle")}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 self-end sm:self-auto">
-          <Button variant="outline" size="sm" onClick={handleImportSettings}>
-            <Download className="size-4" />
-            {t("settings.import")}
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleExportSettings}>
-            <Upload className="size-4" />
-            {t("settings.export")}
-          </Button>
-        </div>
-      </div>
-
-      {/* ── 1. 外观设置 ─────────────────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">{t("settings.appearance")}</CardTitle>
-          <CardDescription>{t("settings.appearanceDesc")}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-2">
-            {THEME_OPTIONS.map((opt) => {
-              const Icon = opt.icon;
-              return (
-                <Button
-                  key={opt.value}
-                  variant={settings.theme === opt.value ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => update({ theme: opt.value })}
-                  className="flex-1"
-                >
-                  <Icon className="size-4" />
-                  {t(`settings.${opt.value}`)}
-                </Button>
-              );
-            })}
+    <div className="h-[calc(100vh-3.5rem)] overflow-y-auto">
+      <div className="mx-auto max-w-2xl w-full px-3 sm:px-4 py-4 sm:py-6 space-y-6 sm:space-y-8">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-0 sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">{t("settings.title")}</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {t("settings.subtitle")}
+            </p>
           </div>
-        </CardContent>
-      </Card>
+          <div className="flex items-center gap-2 self-end sm:self-auto">
+            <Button variant="outline" size="sm" onClick={handleImportSettings}>
+              <Download className="size-4" />
+              {t("settings.import")}
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleExportSettings}>
+              <Upload className="size-4" />
+              {t("settings.export")}
+            </Button>
+          </div>
+        </div>
 
-      {/* ── 2. 大模型设置 ────────────────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">{t("settings.models")}</CardTitle>
-          <CardDescription>{t("settings.modelsDesc")}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <ModelSelectRow
-            label={t("settings.chapterModel")}
-            value={settings.chapterModel}
-            models={settings.models}
-            onChange={(v) => update({ chapterModel: v })}
-          />
-          <ModelSelectRow
-            label={t("settings.summaryModel")}
-            value={settings.summaryModel}
-            models={settings.models}
-            onChange={(v) => update({ summaryModel: v })}
-          />
-          <ModelSelectRow
-            label={t("settings.qaModel")}
-            value={settings.qaModel}
-            models={settings.models}
-            onChange={(v) => update({ qaModel: v })}
-          />
-        </CardContent>
-      </Card>
-
-      {/* ── 3. 大模型管理 ────────────────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">{t("settings.modelManage")}</CardTitle>
-          <CardDescription>{t("settings.modelManageDesc")}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {settings.models.map((model) => (
-            <div
-              key={model.id}
-              className="flex items-center gap-3 rounded-md border p-3"
-            >
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{model.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {model.provider} · {model.modelId}
-                </p>
-                <p className="text-xs text-muted-foreground/70 mt-0.5">
-                  {maskApiKey(model.apiKey)}
-                </p>
-                {model.apiUrl && (
-                  <p className="text-xs text-muted-foreground/70 truncate">
-                    {model.apiUrl}
-                  </p>
-                )}
-                <p className="text-xs text-muted-foreground/50 mt-0.5">
-                  {t("common.maxContext")}:{" "}
-                  {(model.maxContextTokens ?? 16000).toLocaleString()} |
-                  {t("common.maxOutput")}:{" "}
-                  {(model.maxOutputTokens ?? 16384).toLocaleString()}
-                </p>
-              </div>
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => openEditModel(model)}
-                >
-                  <Pencil className="size-3" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => deleteModel(model.id)}
-                >
-                  <Trash2 className="size-3 text-destructive" />
-                </Button>
-              </div>
-            </div>
-          ))}
-
-          {/* Inline add/edit form */}
-          {addModelOpen ? (
-            <div className="rounded-md border p-3 space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-medium">
-                  {editModelId
-                    ? t("common.edit") + " " + t("settings.models")
-                    : t("settings.addModel")}
-                </p>
-                <Button variant="ghost" size="icon" onClick={cancelModelForm}>
-                  <X className="size-3" />
-                </Button>
-              </div>
-              {/* Preset selector (only when adding new, not editing) */}
-              {!editModelId && (
-                <Select
-                  value={presetMode ? "preset" : "custom"}
-                  onValueChange={(v) => {
-                    if (v === "custom") {
-                      setPresetMode(false);
-                      setModelForm({
-                        name: "",
-                        provider: "",
-                        modelId: "",
-                        apiKey: "",
-                        apiUrl: "",
-                        maxContextTokens: 16000,
-                        maxOutputTokens: 16384,
-                      });
-                    } else {
-                      setPresetMode(true);
+        {/* ── 1. 外观设置 ─────────────────────────────────────── */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">
+              {t("settings.appearance")}
+            </CardTitle>
+            <CardDescription>{t("settings.appearanceDesc")}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-2">
+              {THEME_OPTIONS.map((opt) => {
+                const Icon = opt.icon;
+                return (
+                  <Button
+                    key={opt.value}
+                    variant={
+                      settings.theme === opt.value ? "default" : "outline"
                     }
-                  }}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="custom">
-                      {t("settings.customModel")}
-                    </SelectItem>
-                    {Object.entries(MODEL_PRESETS).map(([key, preset]) => (
-                      <SelectItem key={key} value={key}>
-                        {preset.name} ({preset.provider})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-              {/* When a preset is selected, show preset selector for which preset */}
-              {!editModelId && presetMode && (
-                <Select
-                  value={
-                    Object.keys(MODEL_PRESETS).find(
-                      (k) => MODEL_PRESETS[k].name === modelForm.name,
-                    ) || ""
-                  }
-                  onValueChange={(v) => {
-                    if (!v) return;
-                    const preset = MODEL_PRESETS[v];
-                    if (preset) {
-                      setModelForm({
-                        name: preset.name,
-                        provider: preset.provider,
-                        modelId: preset.modelId,
-                        apiKey: modelForm.apiKey,
-                        apiUrl: preset.apiUrl,
-                        maxContextTokens: preset.maxContextTokens,
-                        maxOutputTokens: preset.maxOutputTokens,
-                      });
-                    }
-                  }}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="选择预设模型..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(MODEL_PRESETS).map(([key, preset]) => (
-                      <SelectItem key={key} value={key}>
-                        {preset.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-              <div className="grid grid-cols-2 gap-2">
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-muted-foreground">
-                    名称
-                  </label>
-                  <Input
-                    placeholder="GPT-4o"
-                    value={modelForm.name}
-                    onChange={(e) =>
-                      setModelForm((f) => ({ ...f, name: e.target.value }))
-                    }
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-muted-foreground">
-                    提供商
-                  </label>
-                  <Input
-                    placeholder="OpenAI"
-                    value={modelForm.provider}
-                    onChange={(e) =>
-                      setModelForm((f) => ({ ...f, provider: e.target.value }))
-                    }
-                  />
-                </div>
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-muted-foreground">
-                  模型ID
-                </label>
-                <Input
-                  placeholder="gpt-4o"
-                  value={modelForm.modelId}
-                  onChange={(e) =>
-                    setModelForm((f) => ({ ...f, modelId: e.target.value }))
-                  }
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-muted-foreground">
-                  API Key
-                </label>
-                <div className="flex gap-1">
-                  <Input
-                    type={showApiKey ? "text" : "password"}
-                    placeholder="sk-..."
-                    value={modelForm.apiKey}
-                    onChange={(e) =>
-                      setModelForm((f) => ({ ...f, apiKey: e.target.value }))
-                    }
+                    size="sm"
+                    onClick={() => update({ theme: opt.value })}
                     className="flex-1"
-                  />
+                  >
+                    <Icon className="size-4" />
+                    {t(`settings.${opt.value}`)}
+                  </Button>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ── 2. 大模型设置 ────────────────────────────────────── */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">{t("settings.models")}</CardTitle>
+            <CardDescription>{t("settings.modelsDesc")}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <ModelSelectRow
+              label={t("settings.chapterModel")}
+              value={settings.chapterModel}
+              models={settings.models}
+              onChange={(v) => update({ chapterModel: v })}
+            />
+            <ModelSelectRow
+              label={t("settings.summaryModel")}
+              value={settings.summaryModel}
+              models={settings.models}
+              onChange={(v) => update({ summaryModel: v })}
+            />
+            <ModelSelectRow
+              label={t("settings.qaModel")}
+              value={settings.qaModel}
+              models={settings.models}
+              onChange={(v) => update({ qaModel: v })}
+            />
+          </CardContent>
+        </Card>
+
+        {/* ── 3. 大模型管理 ────────────────────────────────────── */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">
+              {t("settings.modelManage")}
+            </CardTitle>
+            <CardDescription>{t("settings.modelManageDesc")}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {settings.models.map((model) => (
+              <div
+                key={model.id}
+                className="flex items-center gap-3 rounded-md border p-3"
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{model.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {model.provider} · {model.modelId}
+                  </p>
+                  <p className="text-xs text-muted-foreground/70 mt-0.5">
+                    {maskApiKey(model.apiKey)}
+                  </p>
+                  {model.apiUrl && (
+                    <p className="text-xs text-muted-foreground/70 truncate">
+                      {model.apiUrl}
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground/50 mt-0.5">
+                    {t("common.maxContext")}:{" "}
+                    {(model.maxContextTokens ?? 16000).toLocaleString()} |
+                    {t("common.maxOutput")}:{" "}
+                    {(model.maxOutputTokens ?? 16384).toLocaleString()}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1">
                   <Button
                     variant="ghost"
                     size="icon"
-                    type="button"
-                    onClick={() => setShowApiKey((v) => !v)}
+                    onClick={() => openEditModel(model)}
                   >
-                    {showApiKey ? (
-                      <EyeOff className="size-3.5" />
-                    ) : (
-                      <Eye className="size-3.5" />
-                    )}
+                    <Pencil className="size-3" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => deleteModel(model.id)}
+                  >
+                    <Trash2 className="size-3 text-destructive" />
                   </Button>
                 </div>
               </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-muted-foreground">
-                  API URL
-                </label>
-                <Input
-                  placeholder="https://api.openai.com/v1"
-                  value={modelForm.apiUrl}
-                  onChange={(e) =>
-                    setModelForm((f) => ({ ...f, apiUrl: e.target.value }))
-                  }
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
+            ))}
+
+            {/* Inline add/edit form */}
+            {addModelOpen ? (
+              <div className="rounded-md border p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium">
+                    {editModelId
+                      ? t("common.edit") + " " + t("settings.models")
+                      : t("settings.addModel")}
+                  </p>
+                  <Button variant="ghost" size="icon" onClick={cancelModelForm}>
+                    <X className="size-3" />
+                  </Button>
+                </div>
+                {/* Preset selector (only when adding new, not editing) */}
+                {!editModelId && (
+                  <Select
+                    value={presetMode ? "preset" : "custom"}
+                    onValueChange={(v) => {
+                      if (v === "custom") {
+                        setPresetMode(false);
+                        setModelForm({
+                          name: "",
+                          provider: "",
+                          modelId: "",
+                          apiKey: "",
+                          apiUrl: "",
+                          maxContextTokens: 16000,
+                          maxOutputTokens: 16384,
+                        });
+                      } else {
+                        setPresetMode(true);
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="custom">
+                        {t("settings.customModel")}
+                      </SelectItem>
+                      {Object.entries(MODEL_PRESETS).map(([key, preset]) => (
+                        <SelectItem key={key} value={key}>
+                          {preset.name} ({preset.provider})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                {/* When a preset is selected, show preset selector for which preset */}
+                {!editModelId && presetMode && (
+                  <Select
+                    value={
+                      Object.keys(MODEL_PRESETS).find(
+                        (k) => MODEL_PRESETS[k].name === modelForm.name,
+                      ) || ""
+                    }
+                    onValueChange={(v) => {
+                      if (!v) return;
+                      const preset = MODEL_PRESETS[v];
+                      if (preset) {
+                        setModelForm({
+                          name: preset.name,
+                          provider: preset.provider,
+                          modelId: preset.modelId,
+                          apiKey: modelForm.apiKey,
+                          apiUrl: preset.apiUrl,
+                          maxContextTokens: preset.maxContextTokens,
+                          maxOutputTokens: preset.maxOutputTokens,
+                        });
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="选择预设模型..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(MODEL_PRESETS).map(([key, preset]) => (
+                        <SelectItem key={key} value={key}>
+                          {preset.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-muted-foreground">
+                      名称
+                    </label>
+                    <Input
+                      placeholder="GPT-4o"
+                      value={modelForm.name}
+                      onChange={(e) =>
+                        setModelForm((f) => ({ ...f, name: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-muted-foreground">
+                      提供商
+                    </label>
+                    <Input
+                      placeholder="OpenAI"
+                      value={modelForm.provider}
+                      onChange={(e) =>
+                        setModelForm((f) => ({
+                          ...f,
+                          provider: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-xs font-medium text-muted-foreground">
-                    最大上下文
+                    模型ID
                   </label>
                   <Input
-                    type="number"
-                    placeholder="16000"
-                    value={modelForm.maxContextTokens}
+                    placeholder="gpt-4o"
+                    value={modelForm.modelId}
                     onChange={(e) =>
-                      setModelForm((f) => ({
-                        ...f,
-                        maxContextTokens: Number(e.target.value),
-                      }))
+                      setModelForm((f) => ({ ...f, modelId: e.target.value }))
                     }
                   />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-xs font-medium text-muted-foreground">
-                    最大输出Tokens
+                    API Key
+                  </label>
+                  <div className="flex gap-1">
+                    <Input
+                      type={showApiKey ? "text" : "password"}
+                      placeholder="sk-..."
+                      value={modelForm.apiKey}
+                      onChange={(e) =>
+                        setModelForm((f) => ({ ...f, apiKey: e.target.value }))
+                      }
+                      className="flex-1"
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      type="button"
+                      onClick={() => setShowApiKey((v) => !v)}
+                    >
+                      {showApiKey ? (
+                        <EyeOff className="size-3.5" />
+                      ) : (
+                        <Eye className="size-3.5" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    API URL
                   </label>
                   <Input
-                    type="number"
-                    placeholder="16384"
-                    value={modelForm.maxOutputTokens}
+                    placeholder="https://api.openai.com/v1"
+                    value={modelForm.apiUrl}
                     onChange={(e) =>
-                      setModelForm((f) => ({
-                        ...f,
-                        maxOutputTokens: Number(e.target.value),
-                      }))
+                      setModelForm((f) => ({ ...f, apiUrl: e.target.value }))
                     }
                   />
                 </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-muted-foreground">
+                      最大上下文
+                    </label>
+                    <Input
+                      type="number"
+                      placeholder="16000"
+                      value={modelForm.maxContextTokens}
+                      onChange={(e) =>
+                        setModelForm((f) => ({
+                          ...f,
+                          maxContextTokens: Number(e.target.value),
+                        }))
+                      }
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-muted-foreground">
+                      最大输出Tokens
+                    </label>
+                    <Input
+                      type="number"
+                      placeholder="16384"
+                      value={modelForm.maxOutputTokens}
+                      onChange={(e) =>
+                        setModelForm((f) => ({
+                          ...f,
+                          maxOutputTokens: Number(e.target.value),
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" size="sm" onClick={cancelModelForm}>
+                    取消
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={submitModel}
+                    disabled={
+                      !(modelForm?.name ?? "").trim() ||
+                      !(modelForm?.provider ?? "").trim() ||
+                      !(modelForm?.modelId ?? "").trim() ||
+                      !(modelForm?.apiKey ?? "").trim()
+                    }
+                  >
+                    <Check className="size-3.5" />
+                    {editModelId ? t("common.save") : t("common.add")}
+                  </Button>
+                </div>
               </div>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" size="sm" onClick={cancelModelForm}>
-                  取消
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={submitModel}
-                  disabled={
-                    !(modelForm?.name ?? "").trim() ||
-                    !(modelForm?.provider ?? "").trim() ||
-                    !(modelForm?.modelId ?? "").trim() ||
-                    !(modelForm?.apiKey ?? "").trim()
-                  }
-                >
-                  <Check className="size-3.5" />
-                  {editModelId ? t("common.save") : t("common.add")}
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full"
-              onClick={openAddModel}
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={openAddModel}
+              >
+                <Plus className="size-3.5" />
+                添加模型
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* ── 4. 多语言支持 ────────────────────────────────────── */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">{t("settings.language")}</CardTitle>
+            <CardDescription>{t("settings.languageDesc")}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Select
+              value={settings.language}
+              onValueChange={(v) => {
+                if (v) {
+                  const loc = v as AppSettings["language"];
+                  update({ language: loc });
+                  setLocale(loc);
+                }
+              }}
             >
-              <Plus className="size-3.5" />
-              添加模型
-            </Button>
-          )}
-        </CardContent>
-      </Card>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {LANGUAGE_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </CardContent>
+        </Card>
 
-      {/* ── 4. 多语言支持 ────────────────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">{t("settings.language")}</CardTitle>
-          <CardDescription>{t("settings.languageDesc")}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Select
-            value={settings.language}
-            onValueChange={(v) => {
-              if (v) {
-                const loc = v as AppSettings["language"];
-                update({ language: loc });
-                setLocale(loc);
-              }
-            }}
+        {/* ── Save indicator ───────────────────────────────────── */}
+        <div className="flex items-center justify-end gap-2 text-xs text-muted-foreground">
+          <Badge
+            variant="outline"
+            className="text-emerald-500 border-emerald-500/30"
           >
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {LANGUAGE_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </CardContent>
-      </Card>
-
-      {/* ── Save indicator ───────────────────────────────────── */}
-      <div className="flex items-center justify-end gap-2 text-xs text-muted-foreground">
-        <Badge
-          variant="outline"
-          className="text-emerald-500 border-emerald-500/30"
-        >
-          <CheckCircleIcon className="size-3 mr-1" />
-          {t("settings.autoSaved")}
-        </Badge>
+            <CheckCircleIcon className="size-3 mr-1" />
+            {t("settings.autoSaved")}
+          </Badge>
+        </div>
       </div>
     </div>
   );

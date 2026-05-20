@@ -76,7 +76,21 @@ async function openAICompletion(
   }
 
   const data = await res.json();
-  return data.choices?.[0]?.message?.content || "";
+  const message = data.choices?.[0]?.message;
+  // DeepSeek V4 Flash (and other reasoning models) may return
+  // the response in `reasoning_content` while `content` is empty.
+  const result = message?.content || message?.reasoning_content || "";
+
+  // Log warning if finish_reason is not "stop" (e.g. "length" = truncated)
+  const finishReason = data.choices?.[0]?.finish_reason;
+  if (finishReason && finishReason !== "stop") {
+    console.warn(
+      `[ai-service] Completion finished with reason "${finishReason}". ` +
+        `Consider increasing max_tokens. Response length: ${result.length}`,
+    );
+  }
+
+  return result;
 }
 
 // ── Anthropic API ────────────────────────────────────────────────────────

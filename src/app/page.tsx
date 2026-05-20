@@ -142,9 +142,9 @@ export default function DashboardPage() {
     <div className="h-[calc(100vh-3.5rem)] overflow-y-auto relative">
       {/* Animated Background Orbs */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
-        <div className="absolute -top-1/4 -left-1/4 w-1/2 h-1/2 bg-gradient-to-br from-blue-500/10 via-violet-500/5 to-transparent rounded-full blur-3xl animate-[float_20s_ease-in-out_infinite]" />
-        <div className="absolute -bottom-1/4 -right-1/4 w-1/2 h-1/2 bg-gradient-to-tl from-emerald-500/10 via-cyan-500/5 to-transparent rounded-full blur-3xl animate-[float_25s_ease-in-out_infinite_5s]" />
-        <div className="absolute top-1/3 left-1/2 w-1/3 h-1/3 bg-gradient-to-tr from-amber-500/8 via-pink-500/5 to-transparent rounded-full blur-3xl animate-[float_30s_ease-in-out_infinite_10s]" />
+        <div className="absolute -top-1/4 -left-1/4 w-1/2 h-1/2 bg-gradient-to-br from-blue-500/10 via-violet-500/5 to-transparent rounded-full blur-3xl animate-float" />
+        <div className="absolute -bottom-1/4 -right-1/4 w-1/2 h-1/2 bg-gradient-to-tl from-emerald-500/10 via-cyan-500/5 to-transparent rounded-full blur-3xl animate-float [animation-delay:5s]" />
+        <div className="absolute top-1/3 left-1/2 w-1/3 h-1/3 bg-gradient-to-tr from-amber-500/8 via-pink-500/5 to-transparent rounded-full blur-3xl animate-float [animation-delay:10s]" />
       </div>
       {/* Content */}
       <div className="relative z-10">
