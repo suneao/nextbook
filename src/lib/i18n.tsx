@@ -51,6 +51,7 @@ const dictionaries: Record<Locale, TranslationDict> = {
     "projects.export": "导出",
     "projects.edit": "编辑",
     "projects.delete": "删除",
+    "projects.search": "搜索项目...",
     "projects.empty": "还没有项目",
     "projects.emptyHint": "创建你的第一个学习项目开始学习",
     "projects.create": "创建项目",
@@ -137,6 +138,7 @@ const dictionaries: Record<Locale, TranslationDict> = {
     "nav.home": "主页",
     "nav.expand": "展开侧栏",
     "nav.collapse": "收起侧栏",
+    "nav.tools": "工具",
     "project.notFound": "项目未找到",
     "project.notFoundDesc": "该学习项目不存在或已被删除",
     "project.backToList": "返回项目列表",
@@ -187,6 +189,7 @@ const dictionaries: Record<Locale, TranslationDict> = {
     "dialog.invalidProject": "无效的项目文件：未找到 project.json",
     "dialog.importFailed": "导入失败",
     "dialog.exportFailed": "导出失败",
+    "tools.subtitle": "常用学习工具和资源",
   },
 
   "en-US": {
@@ -221,6 +224,7 @@ const dictionaries: Record<Locale, TranslationDict> = {
     "projects.export": "Export",
     "projects.edit": "Edit",
     "projects.delete": "Delete",
+    "projects.search": "Search projects...",
     "projects.empty": "No projects yet",
     "projects.emptyHint": "Create your first learning project to get started",
     "projects.create": "Create Project",
@@ -305,6 +309,7 @@ const dictionaries: Record<Locale, TranslationDict> = {
     "nav.home": "Home",
     "nav.expand": "Expand sidebar",
     "nav.collapse": "Collapse sidebar",
+    "nav.tools": "Tools",
     "project.notFound": "Project not found",
     "project.notFoundDesc": "This project does not exist or has been deleted",
     "project.backToList": "Back to projects",
@@ -355,6 +360,7 @@ const dictionaries: Record<Locale, TranslationDict> = {
     "dialog.invalidProject": "Invalid project file: project.json not found",
     "dialog.importFailed": "Import failed",
     "dialog.exportFailed": "Export failed",
+    "tools.subtitle": "Useful learning tools and resources",
   },
 
   "ja-JP": {
@@ -389,6 +395,7 @@ const dictionaries: Record<Locale, TranslationDict> = {
     "projects.export": "エクスポート",
     "projects.edit": "編集",
     "projects.delete": "削除",
+    "projects.search": "プロジェクトを検索...",
     "projects.empty": "プロジェクトがありません",
     "projects.emptyHint": "最初の学習プロジェクトを作成して始めましょう",
     "projects.create": "プロジェクト作成",
@@ -471,6 +478,7 @@ const dictionaries: Record<Locale, TranslationDict> = {
     "nav.home": "ホーム",
     "nav.expand": "サイドバーを開く",
     "nav.collapse": "サイドバーを閉じる",
+    "nav.tools": "ツール",
     "project.notFound": "プロジェクトが見つかりません",
     "project.notFoundDesc": "このプロジェクトは存在しないか削除されました",
     "project.backToList": "プロジェクト一覧に戻る",
@@ -522,6 +530,7 @@ const dictionaries: Record<Locale, TranslationDict> = {
       "無効なプロジェクトファイル：project.jsonが見つかりません",
     "dialog.importFailed": "インポート失敗",
     "dialog.exportFailed": "エクスポート失敗",
+    "tools.subtitle": "便利な学習ツールとリソース",
   },
 };
 

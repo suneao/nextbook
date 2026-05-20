@@ -14,9 +14,10 @@ export async function analyzeChapters(
   pdfText: string,
   modelId: string,
   signal?: AbortSignal,
+  locale?: string,
 ): Promise<Chapter[]> {
   const systemPrompt =
-    "你是一个教材分析专家。请根据提供的教材文本，识别并划分章节结构。";
+    "你是一个教材分析专家。请根据提供的教材文本，识别并划分章节结构。请使用与教材相同的语言输出章节标题。";
 
   const userPrompt = `请分析以下教材文本，识别出所有章节（大章）和小节（小章），返回JSON格式。
 
@@ -60,15 +61,16 @@ export async function extractKnowledgePoints(
   subChapterTitle: string,
   modelId: string,
   signal?: AbortSignal,
+  locale?: string,
 ): Promise<{
   knowledgePoints: KnowledgePoint[];
   examples: Example[];
   exercises: Exercise[];
 }> {
   const systemPrompt =
-    "你是一个教育内容分析专家。请从提供的教材文本中提取知识点、例题和习题。";
+    "你是一个教育内容分析专家。请从提供的教材文本中提取知识点、例题和习题。请使用与教材相同的语言输出内容。";
 
-  const userPrompt = `请详细分析以下教材文本中关于"${subChapterTitle}"的内容，提取详细的学习材料。\n\n【知识点要求 - 务必详细】\n- 每个知识点必须包含200字以上的详细说明\n- 必须使用Markdown格式：## 标题、**加粗**、- 列表、反引号代码块\n- 每个知识点应包含：概念定义、核心性质、推导过程（如有）、典型应用场景、记忆技巧\n- 公式必须使用LaTeX：行内 $...$，块级 $...$（独占一行）\n- 分数 \\frac{}{}，根号 \\sqrt{}，积分 \\int，求和 \\sum，极限 \\lim\n- 知识点数量：3-6个，确保覆盖完整\n\n【例题要求 - 务必完整】\n- 每题必须包含完整的解答步骤，每步都要说明原因\n- 题目和解答中使用 $...$ 包裹所有数学公式\n- 例题数量：2-4道，从易到难\n\n【课后习题要求】\n- 每题必须包含详细解答\n- 习题数量：1-3道\n\n1. 知识点（每个包含标题和200字以上详细说明，Markdown格式，公式用$...$格式）\n2. 例题（每个包含题目和完整解答步骤）\n3. 课后习题（每个包含题目和详细解答）
+  const userPrompt = `请详细分析以下教材文本中关于"${subChapterTitle}"的内容，提取详细的学习材料。\n\n【知识点要求 - 务必详细】\n- 每个知识点必须包含200字以上的详细说明\n- 禁止使用Markdown标题格式（# ## ###），内容中使用**加粗**、*斜体*、==荧光高亮==强调重点\n- 每个知识点应包含：概念定义、核心性质、推导过程（如有）、典型应用场景、记忆技巧\n- 公式必须使用LaTeX：行内 $...$，块级 $...$（独占一行）\n- 分数 \\frac{}{}，根号 \\sqrt{}，积分 \\int，求和 \\sum，极限 \\lim\n- 知识点数量：3-6个，确保覆盖完整\n\n【例题要求 - 务必完整】\n- 每题必须包含完整的解答步骤，每步都要说明原因\n- 题目和解答中使用 $...$ 包裹所有数学公式\n- 例题数量：2-4道，从易到难\n\n【课后习题要求】\n- 每题必须包含详细解答\n- 习题数量：1-3道\n\n1. 知识点（每个包含标题和200字以上详细说明，Markdown格式，公式用$...$格式）\n2. 例题（每个包含题目和完整解答步骤）\n3. 课后习题（每个包含题目和详细解答）
 
 返回格式（严格JSON，不要markdown代码块）：
 {
@@ -106,13 +108,14 @@ export async function regenerateSubChapter(
   modelId: string,
   instructions: string,
   signal?: AbortSignal,
+  locale?: string,
 ): Promise<{
   knowledgePoints: KnowledgePoint[];
   examples: Example[];
   exercises: Exercise[];
 }> {
   const systemPrompt =
-    "你是一个教育内容分析专家。请根据用户要求优化知识点、例题和习题。";
+    "你是一个教育内容分析专家。请根据用户要求优化知识点、例题和习题。请使用与教材相同的语言输出内容。";
 
   const userPrompt =
     '请分析以下教材文本中关于"' +
@@ -122,7 +125,7 @@ export async function regenerateSubChapter(
     instructions +
     "\n\n" +
     "请根据上述改进要求优化生成的内容。\n\n" +
-    "重要：所有数学公式请使用LaTeX格式：行内公式用 \$...\$，块级用 \$\$...\$\$。\n\n" +
+    "重要：禁止使用Markdown标题格式（# ## ###），请用**加粗**、*斜体*、==荧光高亮==；所有数学公式请使用LaTeX格式：行内公式用 \$...\$，块级用 \$\$...\$\$。\n\n" +
     "返回格式（严格JSON，不要markdown代码块）：\n" +
     "{\n" +
     '  "knowledgePoints": [{ "title": "...", "content": "..." }],\n' +

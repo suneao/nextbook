@@ -14,6 +14,7 @@ import {
   MoreHorizontal,
   Download,
   Upload,
+  Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type Project, defaultProjects } from "@/lib/study-data";
@@ -189,7 +190,7 @@ function ProjectDialog({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            取消
+            {t("common.cancel")}
           </Button>
           <Button onClick={submit} disabled={!name.trim()}>
             {edit ? t("common.save") : t("projects.create")}
@@ -214,6 +215,14 @@ export default function ProjectsPage() {
   }, []);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editProject, setEditProject] = useState<Project | undefined>();
+  const [search, setSearch] = useState("");
+
+  const filtered = projects.filter(
+    (p) =>
+      !search ||
+      p.name.toLowerCase().includes(search.toLowerCase()) ||
+      p.description.toLowerCase().includes(search.toLowerCase()),
+  );
 
   useEffect(() => {
     if (loaded) saveProjects(projects);
@@ -271,12 +280,14 @@ export default function ProjectsPage() {
       // Add each file's data as a separate entry
       for (const f of allFiles) {
         if (f.fileData) {
+          const ext =
+            (f as { fileType?: string; name?: string }).fileType ||
+            f.name?.split(".").pop() ||
+            "bin";
           if (f.fileData.startsWith("data:")) {
-            // Save the full data URL so the MIME type is preserved
-            filesFolder?.file(f.id + ".b64", f.fileData);
+            filesFolder?.file(f.id + "." + ext + ".b64", f.fileData);
           } else {
-            // Text content
-            filesFolder?.file(f.id + ".txt", f.fileData);
+            filesFolder?.file(f.id + "." + ext + ".txt", f.fileData);
           }
         }
       }
@@ -315,13 +326,28 @@ export default function ProjectsPage() {
         const restoreFiles = async (arr: Record<string, unknown>[]) => {
           for (const item of arr) {
             const ref = (item._fileRef as string) || item.id;
-            let fileEntry = zip.file("files/" + ref + ".b64");
-            if (fileEntry) {
-              item.fileData = await fileEntry.async("string");
+            // Search for file with any extension pattern: {id}.{ext}.b64 or {id}.{ext}.txt
+            const filesList = Object.keys(zip.files);
+            const b64Entry = filesList.find(
+              (k) => k.startsWith("files/" + ref + ".") && k.endsWith(".b64"),
+            );
+            const txtEntry = filesList.find(
+              (k) => k.startsWith("files/" + ref + ".") && k.endsWith(".txt"),
+            );
+            if (b64Entry) {
+              item.fileData = await zip.file(b64Entry)!.async("string");
+            } else if (txtEntry) {
+              item.fileData = await zip.file(txtEntry)!.async("string");
             } else {
-              fileEntry = zip.file("files/" + ref + ".txt");
+              // Fallback to old naming pattern for backwards compatibility
+              let fileEntry = zip.file("files/" + ref + ".b64");
               if (fileEntry) {
                 item.fileData = await fileEntry.async("string");
+              } else {
+                fileEntry = zip.file("files/" + ref + ".txt");
+                if (fileEntry) {
+                  item.fileData = await fileEntry.async("string");
+                }
               }
             }
             delete item._fileRef;
@@ -356,16 +382,25 @@ export default function ProjectsPage() {
         <div className="flex flex-col sm:flex-row sm:items-end gap-3 sm:gap-0 sm:justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
-              项目管理
+              {t("projects.title")}
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              管理你的学习项目
+              {t("projects.subtitle")}
             </p>
           </div>
           <div className="flex items-center gap-2 self-end sm:self-auto">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <Input
+                className="pl-8 h-9 w-40 text-sm"
+                placeholder={t("projects.search")}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
             <Button variant="outline" size="sm" onClick={handleImportProject}>
               <Download className="size-4" />
-              导入
+              {t("projects.import")}
             </Button>
             <Button
               className="gap-2 shadow-sm"
@@ -375,7 +410,7 @@ export default function ProjectsPage() {
               }}
             >
               <Plus className="size-4" />
-              新建项目
+              {t("projects.new")}
             </Button>
           </div>
         </div>
@@ -395,7 +430,7 @@ export default function ProjectsPage() {
               </div>
               <h2 className="text-lg font-semibold">{t("projects.empty")}</h2>
               <p className="text-sm text-muted-foreground mt-1 mb-6">
-                创建你的第一个学习项目开始学习
+                {t("projects.emptyHint")}
               </p>
               <Button
                 className="gap-2"
@@ -405,13 +440,18 @@ export default function ProjectsPage() {
                 }}
               >
                 <Plus className="size-4" />
-                创建项目
+                {t("projects.create")}
               </Button>
             </CardContent>
           </Card>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-16">
+            <Search className="size-10 text-muted-foreground/30 mx-auto mb-3" />
+            <p className="text-sm text-muted-foreground">没有找到匹配的项目</p>
+          </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {projects.map((project) => {
+          <div className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+            {filtered.map((project) => {
               const { total, completed } = countSubChapters(project);
               const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
 
@@ -490,20 +530,20 @@ export default function ProjectsPage() {
                           }}
                         >
                           <Pencil className="size-4" />
-                          编辑
+                          {t("projects.edit")}
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => handleExportProject(project)}
                         >
                           <Upload className="size-4" />
-                          导出
+                          {t("projects.export")}
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           className="text-destructive"
                           onClick={() => handleDelete(project.id)}
                         >
                           <Trash2 className="size-4" />
-                          删除
+                          {t("projects.delete")}
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>

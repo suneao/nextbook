@@ -15,6 +15,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Plus,
+  Wrench,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -36,6 +37,7 @@ export function AppSidebar({
     { href: "/", label: t("nav.home"), icon: LayoutDashboard },
     { href: "/projects", label: t("nav.projects"), icon: FolderKanban },
     { href: "/storage", label: t("nav.storage"), icon: HardDrive },
+    { href: "/tools", label: t("nav.tools"), icon: Wrench },
     { href: "/settings", label: t("nav.settings"), icon: Settings },
   ];
 

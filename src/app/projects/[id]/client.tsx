@@ -469,6 +469,7 @@ export default function ProjectDetailClient() {
 
   const handleStopAnalysis = useCallback(() => {
     abortRef.current?.abort();
+    setGeneratingToast(false);
   }, []);
 
   const handleRegenerateChapter = useCallback(
@@ -927,18 +928,11 @@ export default function ProjectDetailClient() {
 
       {/* Generating Toast */}
       {generatingToast && (
-        <div className="fixed top-16 right-6 z-50">
-          <div className="flex items-center gap-3 bg-amber-500 text-white px-5 py-3 rounded-xl shadow-lg">
-            <span className="relative flex size-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
-              <span className="relative inline-flex rounded-full size-3 bg-white"></span>
-            </span>
-            <div>
-              <p className="text-sm font-semibold">{t("project.generating")}</p>
-              <p className="text-xs text-amber-100">{t("project.generatingHint")}</p>
-            </div>
-          </div>
-        </div>
+        <GeneratingToast
+          message={t("project.generating")}
+          hint={t("project.generatingHint")}
+          onClose={() => setGeneratingToast(false)}
+        />
       )}
 
       <AIChatPanel
@@ -1762,6 +1756,44 @@ function StudyUnitViewer({
         </div>
       </section>
       <div className="h-16" />
+    </div>
+  );
+}
+
+// ── Generating Toast ──────────────────────────────────────────────────
+
+function GeneratingToast({
+  message,
+  hint,
+  onClose,
+}: {
+  message: string;
+  hint: string;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const t = setTimeout(onClose, 5000);
+    return () => clearTimeout(t);
+  }, [onClose]);
+
+  return (
+    <div className="fixed top-16 right-6 z-50 motion-preset-slide-down motion-duration-300">
+      <div className="flex items-center gap-3 bg-amber-500 text-white px-5 py-3 rounded-xl shadow-2xl">
+        <span className="relative flex size-3">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+          <span className="relative inline-flex rounded-full size-3 bg-white"></span>
+        </span>
+        <div>
+          <p className="text-sm font-semibold">{message}</p>
+          <p className="text-xs text-amber-100">{hint}</p>
+        </div>
+        <button
+          onClick={onClose}
+          className="ml-2 shrink-0 opacity-70 hover:opacity-100"
+        >
+          <X className="size-3.5" />
+        </button>
+      </div>
     </div>
   );
 }

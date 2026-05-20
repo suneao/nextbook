@@ -13,6 +13,7 @@ import {
   File,
 } from "lucide-react";
 import { chatCompletion } from "@/lib/ai-service";
+import { useLocale } from "@/lib/i18n";
 import { Markdown } from "@/components/markdown";
 import { extractTextFromPDF } from "@/lib/pdf-service";
 import type { AppSettings } from "@/lib/study-data-server";
@@ -28,6 +29,7 @@ export function AIChatPanel({
   onClose: () => void;
   chapterTitle?: string;
 }) {
+  const { t, locale } = useLocale();
   const [messages, setMessages] = useState<
     { role: "user" | "assistant"; content: string }[]
   >([]);
@@ -104,7 +106,7 @@ export function AIChatPanel({
       if (!raw) {
         setMessages((p) => [
           ...p,
-          { role: "assistant", content: "请先在**设置**中配置 API Key。" },
+          { role: "assistant", content: t("project.aiNoApiKey") },
         ]);
         setLoading(false);
         return;
@@ -114,33 +116,40 @@ export function AIChatPanel({
       if (!model?.apiKey) {
         setMessages((p) => [
           ...p,
-          { role: "assistant", content: "请先在**设置**中配置 API Key。" },
+          { role: "assistant", content: t("project.aiNoApiKey") },
         ]);
         setLoading(false);
         return;
       }
 
-      const systemPrompt = `你是一个学习助手。当前章节：${chapterTitle || "未知"}。请使用Markdown格式回复，数学公式用LaTeX（行内$...$，块级$$...$$）。如果用户上传了文件内容，请基于文件内容回答问题。`;
+      const systemPrompt = locale?.startsWith("en")
+        ? `You are a learning assistant. Current chapter: ${chapterTitle || "Unknown"}. Please reply in English using Markdown format, LaTeX for math formulas ($...$ inline, $$...$$ block). If files are uploaded, base your answers on their content.`
+        : locale?.startsWith("ja")
+          ? `あなたは学習アシスタントです。現在の章: ${chapterTitle || "不明"}。日本語で回答し、Markdown形式とLaTeX数式（行内$...$、ブロック$$...$$）を使用してください。ファイルがアップロードされた場合、その内容に基づいて回答してください。`
+          : `你是一个学习助手。当前章节：${chapterTitle || "未知"}。请使用Markdown格式回复，数学公式用LaTeX（行内$...$，块级$$...$$）。如果用户上传了文件内容，请基于文件内容回答问题。`;
 
       const reply = await chatCompletion(
-            settings.qaModel,
-            [
-              { role: "system", content: systemPrompt },
-              ...messages.map((m) => ({
-                role: m.role as "user" | "assistant",
-                content: m.content,
-              })),
-              { role: "user", content: fullContent },
-            ],
-            { temperature: 0.7 },
-          );
+        settings.qaModel,
+        [
+          { role: "system", content: systemPrompt },
+          ...messages.map((m) => ({
+            role: m.role as "user" | "assistant",
+            content: m.content,
+          })),
+          { role: "user", content: fullContent },
+        ],
+        { temperature: 0.7 },
+      );
       setMessages((p) => [...p, { role: "assistant", content: reply }]);
     } catch (e) {
       setMessages((p) => [
         ...p,
         {
           role: "assistant",
-          content: "出错了：" + (e instanceof Error ? e.message : "未知错误"),
+          content:
+            t("project.aiError") +
+            ": " +
+            (e instanceof Error ? e.message : "Unknown"),
         },
       ]);
     } finally {
@@ -159,7 +168,7 @@ export function AIChatPanel({
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold flex items-center gap-2">
             <Sparkles className="size-4 text-violet-500" />
-            AI 答疑
+            {t("project.aiChat")}
           </h3>
           <Button
             variant="ghost"
@@ -172,7 +181,7 @@ export function AIChatPanel({
         </div>
         {chapterTitle && (
           <p className="text-xs text-muted-foreground mt-1">
-            当前：{chapterTitle}
+            {t("project.currentChapter")}: {chapterTitle}
           </p>
         )}
       </div>
@@ -184,10 +193,10 @@ export function AIChatPanel({
             <div className="text-center py-12">
               <MessageCircle className="size-8 mx-auto text-muted-foreground mb-3" />
               <p className="text-sm text-muted-foreground">
-                有问题？向 AI 提问
+                {t("project.aiChatPrompt")}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                可以上传文件让 AI 分析
+                {t("project.aiChatHint")}
               </p>
             </div>
           )}
@@ -218,7 +227,7 @@ export function AIChatPanel({
           {loading && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin" />
-              AI 正在思考...
+              {t("project.aiThinking")}
             </div>
           )}
           <div ref={messagesEndRef} />
@@ -262,13 +271,13 @@ export function AIChatPanel({
             size="icon"
             className="size-9 shrink-0"
             onClick={() => fileInputRef.current?.click()}
-            title="上传文件"
+            title={t("project.uploadFile")}
           >
             <Paperclip className="size-4" />
           </Button>
           <input
             className="flex-1 bg-muted rounded-lg px-3 py-2 text-sm outline-none placeholder:text-muted-foreground"
-            placeholder="输入问题或上传文件..."
+            placeholder={t("project.aiPlaceholder")}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {

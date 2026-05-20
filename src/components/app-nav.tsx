@@ -1,6 +1,7 @@
 "use client";
 
 import { ThemeToggle } from "@/components/theme-toggle";
+import { NotificationBell } from "@/components/toast-provider";
 import { BookOpen } from "lucide-react";
 
 export function AppNav() {
@@ -22,6 +23,7 @@ export function AppNav() {
 
         {/* Right actions */}
         <div className="flex items-center gap-2">
+          <NotificationBell />
           <ThemeToggle />
         </div>
       </div>

@@ -111,12 +111,11 @@ export default function SettingsPage() {
       setSettings((prev) => {
         const next = { ...prev, ...partial };
         saveSettings(next);
-        // Sync theme with theme provider
-        if (partial.theme) {
-          setTheme(partial.theme);
-        }
         return next;
       });
+      if (partial.theme) {
+        startTransition(() => setTheme(partial.theme!));
+      }
     },
     [setTheme],
   );
