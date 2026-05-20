@@ -70,9 +70,7 @@ export default function StoragePage() {
     setLoaded(true);
   }, []);
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  useEffect(() => { refresh(); }, []); // eslint-disable-line
   useEffect(() => {
     const t = setInterval(refresh, 5000);
     return () => clearInterval(t);
@@ -94,8 +92,8 @@ export default function StoragePage() {
 
   return (
     <div className="h-[calc(100vh-3.5rem)] overflow-y-auto bg-gradient-to-b from-background to-muted/20">
-      <div className="max-w-2xl mx-auto px-6 py-8 space-y-6">
-        <div className="flex items-end justify-between">
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-end gap-3 sm:gap-0 sm:justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
               {t("storage.title")}

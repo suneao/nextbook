@@ -2,6 +2,12 @@
 
 const DB = "nextbook-db";
 const VER = 3;
+import type {
+  Project,
+  Textbook,
+  ExercisePDF,
+  ExamPDF,
+} from "./study-data-server";
 const PROJECTS_KEY = "nextbook-projects-index";
 
 function open(): Promise<IDBDatabase> {
@@ -100,9 +106,12 @@ export type ProjectStorageInfo = {
   files: StoredFile[];
 };
 
-function collectFiles(proj: any): StoredFile[] {
+function collectFiles(proj: Project): StoredFile[] {
   const files: StoredFile[] = [];
-  const add = (arr: any[], type: StoredFile["type"]) => {
+  const add = (
+    arr: (Textbook | ExercisePDF | ExamPDF)[],
+    type: StoredFile["type"],
+  ) => {
     for (const f of arr || []) {
       const bytes = f.fileData
         ? new TextEncoder().encode(f.fileData).length
@@ -126,10 +135,13 @@ export async function getProjectStorageDetails(): Promise<
   try {
     const rawIdx = await loadData(PROJECTS_KEY);
     if (!rawIdx) return [];
-    const idx: { id: string; name: string }[] = JSON.parse(rawIdx);
+    const idx: { id: string; name: string }[] = JSON.parse(rawIdx) as {
+      id: string;
+      name: string;
+    }[];
     const result: ProjectStorageInfo[] = [];
-    for (const p of idx) {
-      const projKey = "project-" + p.id;
+    for (const { id, name } of idx) {
+      const projKey = "project-" + id;
       const raw = await loadData(projKey);
       const sizeMB = raw
         ? Math.round(
@@ -142,7 +154,7 @@ export async function getProjectStorageDetails(): Promise<
           files = collectFiles(JSON.parse(raw));
         } catch {}
       }
-      result.push({ id: p.id, name: p.name, sizeMB, files });
+      result.push({ id, name, sizeMB, files });
     }
     return result;
   } catch {
@@ -159,18 +171,18 @@ export async function deleteProjectStorage(projectId: string): Promise<void> {
       const idx = JSON.parse(rawIdx);
       await saveData(
         PROJECTS_KEY,
-        JSON.stringify(idx.filter((p: any) => p.id !== projectId)),
+        JSON.stringify(idx.filter((p: { id: string }) => p.id !== projectId)),
       );
     } catch {}
   }
 }
 
-export async function loadAllProjects(): Promise<any[]> {
+export async function loadAllProjects(): Promise<Project[]> {
   const rawIdx = await loadData(PROJECTS_KEY);
   if (!rawIdx) return [];
   try {
     const idx: { id: string }[] = JSON.parse(rawIdx);
-    const projects: any[] = [];
+    const projects: Project[] = [];
     for (const p of idx) {
       const raw = await loadData("project-" + p.id);
       if (raw) projects.push(JSON.parse(raw));
@@ -181,18 +193,18 @@ export async function loadAllProjects(): Promise<any[]> {
   }
 }
 
-export async function saveProject(project: any): Promise<void> {
+export async function saveProject(project: Project): Promise<void> {
   await saveData("project-" + project.id, JSON.stringify(project));
   // Update index
   const rawIdx = await loadData(PROJECTS_KEY);
   const idx: { id: string; name: string }[] = rawIdx ? JSON.parse(rawIdx) : [];
-  const existing = idx.findIndex((p: any) => p.id === project.id);
+  const existing = idx.findIndex((p: { id: string }) => p.id === project.id);
   if (existing >= 0) idx[existing] = { id: project.id, name: project.name };
   else idx.push({ id: project.id, name: project.name });
   await saveData(PROJECTS_KEY, JSON.stringify(idx));
 }
 
-export async function saveAllProjects(projects: any[]): Promise<void> {
+export async function saveAllProjects(projects: Project[]): Promise<void> {
   for (const p of projects) await saveProject(p);
 }
 

@@ -12,7 +12,7 @@ import {
   Trash2,
   ArrowRight,
   Layers,
-  GraduationCap,
+  
   ListTodo,
   Sparkles,
 } from "lucide-react";
@@ -59,7 +59,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const raw = localStorage.getItem(TODOS_KEY);
-    if (raw) setTodos(JSON.parse(raw));
+    if (raw) setTodos(JSON.parse(raw)); // eslint-disable-line react-hooks/set-state-in-effect
   }, []);
   const [newTodo, setNewTodo] = useState("");
 
@@ -110,12 +110,12 @@ export default function DashboardPage() {
   return (
     <div className="h-[calc(100vh-3.5rem)] overflow-y-auto bg-gradient-to-b from-background to-muted/20">
       {!pageLoaded ? (
-        <div className="max-w-5xl mx-auto px-6 md:px-8 lg:px-10 py-8 space-y-8">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 md:px-8 lg:px-10 py-8 space-y-8">
           <div className="h-8 w-48 bg-muted rounded-lg animate-pulse" />
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
             {[1,2,3,4].map(i => <div key={i} className="h-24 bg-muted rounded-xl animate-pulse" />)}
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-2 sm:gap-3 grid-cols-1 sm:grid-cols-2">
             {[1,2].map(i => <div key={i} className="h-32 bg-muted rounded-xl animate-pulse" />)}
           </div>
         </div>
@@ -125,10 +125,10 @@ export default function DashboardPage() {
         <div className="flex items-end justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
-              学习仪表盘
+              {t("nav.dashboard")}
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              欢迎回来，继续你的学习之旅
+              {t("dashboard.welcome")}
             </p>
           </div>
           <Button
@@ -138,7 +138,7 @@ export default function DashboardPage() {
             onClick={() => setAiPanelOpen(true)}
           >
             <Sparkles className="size-4 text-violet-500" />
-            AI 答疑
+            {t("dashboard.aiChat")}
           </Button>
         </div>
 
@@ -148,7 +148,7 @@ export default function DashboardPage() {
             {
               icon: FolderKanban,
               val: stats.projects,
-              sub: "个项目",
+              sub: t("dashboard.units.projects"),
 
               bg: "bg-blue-500/10 dark:bg-blue-400/10",
               icn: "text-blue-600 dark:text-blue-400",
@@ -156,7 +156,7 @@ export default function DashboardPage() {
             {
               icon: Layers,
               val: stats.chapters,
-              sub: "个章节",
+              sub: t("dashboard.units.chapters"),
 
               bg: "bg-violet-500/10 dark:bg-violet-400/10",
               icn: "text-violet-600 dark:text-violet-400",
@@ -164,7 +164,7 @@ export default function DashboardPage() {
             {
               icon: CheckCircle2,
               val: `${stats.done}/${stats.total}`,
-              sub: "节已完成",
+              sub: t("dashboard.units.completed"),
 
               bg: "bg-emerald-500/10 dark:bg-emerald-400/10",
               icn: "text-emerald-600 dark:text-emerald-400",
@@ -198,14 +198,14 @@ export default function DashboardPage() {
         </div>
 
         {/* Two columns */}
-        <div className="grid gap-6 lg:grid-cols-5">
+        <div className="grid gap-4 lg:gap-6 grid-cols-1 lg:grid-cols-5">
           {/* Projects */}
           <section className="lg:col-span-3 space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">{t("dashboard.recentProjects")}</h2>
               <Link href="/projects">
                 <Button variant="ghost" size="sm">
-                  全部
+                  {t("dashboard.viewAll")}
                   <ArrowRight className="ml-1 size-4" />
                 </Button>
               </Link>
@@ -218,15 +218,15 @@ export default function DashboardPage() {
                       <FolderKanban className="size-7 text-muted-foreground/50" />
                     </div>
                     <p className="text-sm font-medium text-muted-foreground">
-                      还没有学习项目
+                      {t("dashboard.noProjects")}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      创建你的第一个项目开始学习
+                      {t("dashboard.createFirst")}
                     </p>
                     <Link href="/projects" className="mt-4">
                       <Button size="sm" className="gap-2">
                         <Plus className="size-4" />
-                        创建项目
+                        {t("projects.create")}
                       </Button>
                     </Link>
                   </CardContent>
@@ -259,13 +259,13 @@ export default function DashboardPage() {
                         </div>
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                           <span className="flex-1">
-                            {done}/{total} 节
+                            {done}/{total} {t("dashboard.units.section")}
                           </span>
                           <Badge
                             variant="secondary"
                             className="text-[0.65rem] h-5"
                           >
-                            {p.chapters.length}章
+                            {p.chapters.length}{t("dashboard.units.chapter")}
                           </Badge>
                           <span className="font-medium tabular-nums">
                             {pct}%
@@ -282,14 +282,14 @@ export default function DashboardPage() {
               {[
                 {
                   icon: Plus,
-                  title: "创建新项目",
-                  desc: "上传教材开始学习",
+                  title: t("dashboard.newProject"),
+                  desc: t("dashboard.uploadTextbook"),
                   href: "/projects",
                 },
                 {
                   icon: BookOpen,
-                  title: "浏览项目库",
-                  desc: "查看所有项目",
+                  title: t("dashboard.browseProjects"),
+                  desc: t("dashboard.viewAllProjects"),
                   href: "/projects",
                 },
               ].map((a) => (
@@ -318,7 +318,7 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold flex items-center gap-2">
                 <ListTodo className="size-5" />
-                待办事项
+                {t("dashboard.todos")}
               </h2>
               <Badge variant="secondary" className="text-xs">
                 {doneTodos}/{todos.length}
@@ -328,7 +328,7 @@ export default function DashboardPage() {
               <CardContent className="p-4 space-y-1">
                 {todos.length === 0 && (
                   <p className="text-sm text-muted-foreground text-center py-6">
-                    暂无待办
+                    {t("dashboard.noTodos")}
                   </p>
                 )}
                 {todos.map((todo) => (

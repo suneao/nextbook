@@ -3,6 +3,8 @@ import { Inter, Geist_Mono } from "next/font/google";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import { LocaleProvider } from "@/lib/i18n";
+import { ToastProvider } from "@/components/toast-provider";
+import { Analytics } from "@vercel/analytics/react";
 import { AppNav } from "@/components/app-nav";
 import { AppLayout } from "./layout-client";
 import { cn } from "@/lib/utils";
@@ -42,19 +44,19 @@ export default function RootLayout({
       )}
       suppressHydrationWarning
     >
-      <head>
-        <link rel="icon" href="/favicon.ico" sizes="any" />
-      </head>
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <ThemeProvider defaultTheme="system">
           <LocaleProvider>
-            <TooltipProvider>
-              <AppNav />
-              <div className="flex flex-1">
-                <AppLayout>{children}</AppLayout>
-              </div>
-            </TooltipProvider>
+            <ToastProvider>
+              <TooltipProvider>
+                <AppNav />
+                <div className="flex flex-1">
+                  <AppLayout>{children}</AppLayout>
+                </div>
+              </TooltipProvider>
+            </ToastProvider>
           </LocaleProvider>
+          <Analytics />
         </ThemeProvider>
       </body>
     </html>

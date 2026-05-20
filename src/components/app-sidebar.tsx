@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { useLocale } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -8,20 +9,14 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   LayoutDashboard,
   FolderKanban,
-  Settings, HardDrive,
+  Settings,
+  HardDrive,
   BookOpen,
   ChevronLeft,
   ChevronRight,
   Plus,
 } from "lucide-react";
 import Link from "next/link";
-
-const navItems = [
-  { href: "/", label: "主页", icon: LayoutDashboard },
-  { href: "/projects", label: "项目管理", icon: FolderKanban },
-  { href: "/storage", label: "存储", icon: HardDrive },
-  { href: "/settings", label: "设置", icon: Settings },
-];
 
 type AppSidebarProps = {
   collapsed: boolean;
@@ -34,7 +29,15 @@ export function AppSidebar({
   onToggle,
   onCreateProject,
 }: AppSidebarProps) {
+  const { t } = useLocale();
   const pathname = usePathname();
+
+  const navItems = [
+    { href: "/", label: t("nav.home"), icon: LayoutDashboard },
+    { href: "/projects", label: t("nav.projects"), icon: FolderKanban },
+    { href: "/storage", label: t("nav.storage"), icon: HardDrive },
+    { href: "/settings", label: t("nav.settings"), icon: Settings },
+  ];
 
   return (
     <aside
@@ -111,7 +114,7 @@ export function AppSidebar({
               title={collapsed ? "新建项目" : undefined}
             >
               <Plus className="size-5 shrink-0" />
-              {!collapsed && <span>新建项目</span>}
+              {!collapsed && <span>{t("projects.new")}</span>}
             </Button>
           </div>
         )}

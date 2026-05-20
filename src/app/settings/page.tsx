@@ -21,6 +21,7 @@ import {
   type AIModel,
   defaultSettings,
 } from "@/lib/study-data";
+import { useToast } from "@/components/toast-provider";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -93,7 +94,8 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [loaded, setLoaded] = useState(false);
   const { setTheme } = useTheme();
-  const { setLocale } = useLocale();
+  const { setLocale, t } = useLocale();
+  const { toast } = useToast();
 
   useEffect(() => {
     const stored = loadSettings();
@@ -133,6 +135,156 @@ export default function SettingsPage() {
     maxOutputTokens: 16384,
   });
   const [showApiKey, setShowApiKey] = useState(false);
+  const [presetMode, setPresetMode] = useState(false);
+
+  const MODEL_PRESETS = {
+    // OpenAI
+    "gpt-4.1": {
+      name: "GPT-4.1",
+      provider: "OpenAI",
+      modelId: "gpt-4.1",
+      apiUrl: "https://api.openai.com/v1",
+      maxContextTokens: 1000000,
+      maxOutputTokens: 32768,
+    },
+    "gpt-4.1-mini": {
+      name: "GPT-4.1 Mini",
+      provider: "OpenAI",
+      modelId: "gpt-4.1-mini",
+      apiUrl: "https://api.openai.com/v1",
+      maxContextTokens: 1000000,
+      maxOutputTokens: 16384,
+    },
+    "gpt-4o": {
+      name: "GPT-4o",
+      provider: "OpenAI",
+      modelId: "gpt-4o",
+      apiUrl: "https://api.openai.com/v1",
+      maxContextTokens: 128000,
+      maxOutputTokens: 16384,
+    },
+    // Anthropic
+    "claude-opus-4": {
+      name: "Claude Opus 4",
+      provider: "Anthropic",
+      modelId: "claude-opus-4-20250514",
+      apiUrl: "https://api.anthropic.com/v1",
+      maxContextTokens: 200000,
+      maxOutputTokens: 32768,
+    },
+    "claude-sonnet-4": {
+      name: "Claude Sonnet 4",
+      provider: "Anthropic",
+      modelId: "claude-sonnet-4-20250514",
+      apiUrl: "https://api.anthropic.com/v1",
+      maxContextTokens: 200000,
+      maxOutputTokens: 16384,
+    },
+    "claude-haiku-3.5": {
+      name: "Claude Haiku 3.5",
+      provider: "Anthropic",
+      modelId: "claude-haiku-3-5-20250514",
+      apiUrl: "https://api.anthropic.com/v1",
+      maxContextTokens: 200000,
+      maxOutputTokens: 8192,
+    },
+    // Google
+    "gemini-3.1-pro": {
+      name: "Gemini 3.1 Pro",
+      provider: "Google",
+      modelId: "gemini-3.1-pro",
+      apiUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+      maxContextTokens: 2000000,
+      maxOutputTokens: 65536,
+    },
+    "gemini-3.5-flash": {
+      name: "Gemini 3.5 Flash",
+      provider: "Google",
+      modelId: "gemini-3.5-flash",
+      apiUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+      maxContextTokens: 2000000,
+      maxOutputTokens: 65536,
+    },
+    "gemini-2.5-pro": {
+      name: "Gemini 2.5 Pro",
+      provider: "Google",
+      modelId: "gemini-2.5-pro",
+      apiUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+      maxContextTokens: 2000000,
+      maxOutputTokens: 65536,
+    },
+    "gemini-2.5-flash": {
+      name: "Gemini 2.5 Flash",
+      provider: "Google",
+      modelId: "gemini-2.5-flash",
+      apiUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+      maxContextTokens: 1000000,
+      maxOutputTokens: 8192,
+    },
+    // DeepSeek
+    "deepseek-v4-pro": {
+      name: "DeepSeek V4 Pro",
+      provider: "DeepSeek",
+      modelId: "deepseek-v4-pro",
+      apiUrl: "https://api.deepseek.com",
+      maxContextTokens: 1000000,
+      maxOutputTokens: 384000,
+    },
+    "deepseek-v4-flash": {
+      name: "DeepSeek V4 Flash",
+      provider: "DeepSeek",
+      modelId: "deepseek-v4-flash",
+      apiUrl: "https://api.deepseek.com",
+      maxContextTokens: 1000000,
+      maxOutputTokens: 384000,
+    },
+    // xAI
+    "grok-4.3": {
+      name: "Grok 4.3",
+      provider: "xAI",
+      modelId: "grok-4.3",
+      apiUrl: "https://api.x.ai/v1",
+      maxContextTokens: 1000000,
+      maxOutputTokens: 32768,
+    },
+    // Alibaba
+    "qwen-3": {
+      name: "Qwen 3 (235B)",
+      provider: "Alibaba",
+      modelId: "qwen3-235b-a22b",
+      apiUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      maxContextTokens: 262144,
+      maxOutputTokens: 32768,
+    },
+    // Moonshot
+    "kimi-2.6": {
+      name: "Kimi 2.6",
+      provider: "Moonshot",
+      modelId: "kimi-2.6",
+      apiUrl: "https://api.moonshot.cn/v1",
+      maxContextTokens: 128000,
+      maxOutputTokens: 16384,
+    },
+    // MiniMax
+    "minimax-m1": {
+      name: "MiniMax M1",
+      provider: "MiniMax",
+      modelId: "minimax-m1",
+      apiUrl: "https://api.minimaxi.com/v1",
+      maxContextTokens: 1000000,
+      maxOutputTokens: 32768,
+    },
+  } as Record<
+    string,
+    {
+      name: string;
+      provider: string;
+      modelId: string;
+      apiUrl: string;
+      maxContextTokens: number;
+      maxOutputTokens: number;
+    }
+  >;
 
   const openAddModel = () => {
     setModelForm({
@@ -226,7 +378,10 @@ export default function SettingsPage() {
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
-      alert("导出失败: " + (e instanceof Error ? e.message : String(e)));
+      toast(
+        "Export failed: " + (e instanceof Error ? e.message : String(e)),
+        "error",
+      );
     }
   };
 
@@ -250,9 +405,12 @@ export default function SettingsPage() {
           saveSettings(merged);
           if (merged.theme) setTheme(merged.theme);
         });
-        alert("设置导入成功！");
+        toast("Settings imported successfully!", "success");
       } catch (e) {
-        alert("导入失败: " + (e instanceof Error ? e.message : String(e)));
+        toast(
+          "Import failed: " + (e instanceof Error ? e.message : String(e)),
+          "error",
+        );
       }
     };
     input.click();
@@ -261,32 +419,32 @@ export default function SettingsPage() {
   if (!loaded) return null;
 
   return (
-    <div className="mx-auto max-w-2xl w-full px-4 py-6 space-y-8">
+    <div className="mx-auto max-w-2xl w-full px-3 sm:px-4 py-4 sm:py-6 space-y-6 sm:space-y-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-0 sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">设置</h1>
+          <h1 className="text-2xl font-bold">{t("settings.title")}</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            管理应用偏好和AI模型配置
+            {t("settings.subtitle")}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 self-end sm:self-auto">
           <Button variant="outline" size="sm" onClick={handleImportSettings}>
-            <Upload className="size-4" />
-            导入
+            <Download className="size-4" />
+            {t("settings.import")}
           </Button>
           <Button variant="outline" size="sm" onClick={handleExportSettings}>
-            <Download className="size-4" />
-            导出
+            <Upload className="size-4" />
+            {t("settings.export")}
           </Button>
         </div>
       </div>
 
-      {/* ── 1. 外观设置 ──────────────────────────────────────── */}
+      {/* ── 1. 外观设置 ─────────────────────────────────────── */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">外观设置</CardTitle>
-          <CardDescription>选择应用程序的主题模式</CardDescription>
+          <CardTitle className="text-lg">{t("settings.appearance")}</CardTitle>
+          <CardDescription>{t("settings.appearanceDesc")}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex gap-2">
@@ -312,24 +470,24 @@ export default function SettingsPage() {
       {/* ── 2. 大模型设置 ────────────────────────────────────── */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">大模型设置</CardTitle>
-          <CardDescription>为不同的任务选择对应的AI模型</CardDescription>
+          <CardTitle className="text-lg">{t("settings.models")}</CardTitle>
+          <CardDescription>{t("settings.modelsDesc")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <ModelSelectRow
-            label="章节划分模型"
+            label={t("settings.chapterModel")}
             value={settings.chapterModel}
             models={settings.models}
             onChange={(v) => update({ chapterModel: v })}
           />
           <ModelSelectRow
-            label="知识点总结模型"
+            label={t("settings.summaryModel")}
             value={settings.summaryModel}
             models={settings.models}
             onChange={(v) => update({ summaryModel: v })}
           />
           <ModelSelectRow
-            label="知识点问答模型"
+            label={t("settings.qaModel")}
             value={settings.qaModel}
             models={settings.models}
             onChange={(v) => update({ qaModel: v })}
@@ -340,8 +498,8 @@ export default function SettingsPage() {
       {/* ── 3. 大模型管理 ────────────────────────────────────── */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">大模型管理</CardTitle>
-          <CardDescription>添加、编辑或删除可用的AI模型配置</CardDescription>
+          <CardTitle className="text-lg">{t("settings.modelManage")}</CardTitle>
+          <CardDescription>{t("settings.modelManageDesc")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {settings.models.map((model) => (
@@ -391,12 +549,86 @@ export default function SettingsPage() {
             <div className="rounded-md border p-3 space-y-3">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-medium">
-                  {editModelId ? "编辑模型" : "添加模型"}
+                  {editModelId
+                    ? t("common.edit") + " " + t("settings.models")
+                    : t("settings.addModel")}
                 </p>
                 <Button variant="ghost" size="icon" onClick={cancelModelForm}>
                   <X className="size-3" />
                 </Button>
               </div>
+              {/* Preset selector (only when adding new, not editing) */}
+              {!editModelId && (
+                <Select
+                  value={presetMode ? "preset" : "custom"}
+                  onValueChange={(v) => {
+                    if (v === "custom") {
+                      setPresetMode(false);
+                      setModelForm({
+                        name: "",
+                        provider: "",
+                        modelId: "",
+                        apiKey: "",
+                        apiUrl: "",
+                        maxContextTokens: 16000,
+                        maxOutputTokens: 16384,
+                      });
+                    } else {
+                      setPresetMode(true);
+                    }
+                  }}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="custom">
+                      {t("settings.customModel")}
+                    </SelectItem>
+                    {Object.entries(MODEL_PRESETS).map(([key, preset]) => (
+                      <SelectItem key={key} value={key}>
+                        {preset.name} ({preset.provider})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              {/* When a preset is selected, show preset selector for which preset */}
+              {!editModelId && presetMode && (
+                <Select
+                  value={
+                    Object.keys(MODEL_PRESETS).find(
+                      (k) => MODEL_PRESETS[k].name === modelForm.name,
+                    ) || ""
+                  }
+                  onValueChange={(v) => {
+                    if (!v) return;
+                    const preset = MODEL_PRESETS[v];
+                    if (preset) {
+                      setModelForm({
+                        name: preset.name,
+                        provider: preset.provider,
+                        modelId: preset.modelId,
+                        apiKey: modelForm.apiKey,
+                        apiUrl: preset.apiUrl,
+                        maxContextTokens: preset.maxContextTokens,
+                        maxOutputTokens: preset.maxOutputTokens,
+                      });
+                    }
+                  }}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="选择预设模型..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(MODEL_PRESETS).map(([key, preset]) => (
+                      <SelectItem key={key} value={key}>
+                        {preset.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               <div className="grid grid-cols-2 gap-2">
                 <div className="flex flex-col gap-1">
                   <label className="text-xs font-medium text-muted-foreground">
@@ -524,7 +756,7 @@ export default function SettingsPage() {
                   }
                 >
                   <Check className="size-3.5" />
-                  {editModelId ? "保存" : "添加"}
+                  {editModelId ? t("common.save") : t("common.add")}
                 </Button>
               </div>
             </div>
@@ -545,8 +777,8 @@ export default function SettingsPage() {
       {/* ── 4. 多语言支持 ────────────────────────────────────── */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">多语言支持</CardTitle>
-          <CardDescription>选择应用程序的显示语言</CardDescription>
+          <CardTitle className="text-lg">{t("settings.language")}</CardTitle>
+          <CardDescription>{t("settings.languageDesc")}</CardDescription>
         </CardHeader>
         <CardContent>
           <Select
@@ -580,7 +812,7 @@ export default function SettingsPage() {
           className="text-emerald-500 border-emerald-500/30"
         >
           <CheckCircleIcon className="size-3 mr-1" />
-          设置已自动保存
+          {t("settings.autoSaved")}
         </Badge>
       </div>
     </div>

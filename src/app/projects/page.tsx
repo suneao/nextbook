@@ -8,10 +8,8 @@ import {
   FileText,
   GraduationCap,
   Calendar,
-  ChevronRight,
   Pencil,
   Trash2,
-  Sparkles,
   FolderKanban,
   MoreHorizontal,
   Download,
@@ -26,6 +24,7 @@ import {
   deleteProjectStorage,
 } from "@/lib/storage";
 import JSZip from "jszip";
+import { useToast } from "@/components/toast-provider";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -86,6 +85,7 @@ function ProjectDialog({
   onSubmit: (p: Project) => void;
   edit?: Project;
 }) {
+  const { t } = useLocale();
   const [name, setName] = useState(edit?.name || "");
   const [desc, setDesc] = useState(edit?.description || "");
   const [color, setColor] = useState(edit?.color || COLORS[0]);
@@ -118,31 +118,37 @@ function ProjectDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{edit ? "编辑项目" : "新建项目"}</DialogTitle>
+          <DialogTitle>
+            {edit ? t("projects.editProject") : t("projects.newProject")}
+          </DialogTitle>
           <DialogDescription>
-            {edit ? "修改项目信息" : "创建一个新的学习项目"}
+            {edit ? t("projects.editInfo") : t("projects.createInfo")}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <label className="text-xs font-medium">项目名称</label>
+            <label className="text-xs font-medium">
+              {t("projects.projectName")}
+            </label>
             <Input
-              placeholder="例如：高等数学"
+              placeholder={t("projects.namePlaceholder")}
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-medium">描述</label>
+            <label className="text-xs font-medium">
+              {t("projects.description")}
+            </label>
             <Textarea
-              placeholder="简要描述..."
+              placeholder={t("projects.descPlaceholder")}
               rows={2}
               value={desc}
               onChange={(e) => setDesc(e.target.value)}
             />
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-medium">颜色</label>
+            <label className="text-xs font-medium">{t("projects.color")}</label>
             <div className="flex gap-2">
               {COLORS.map((c) => (
                 <button
@@ -161,7 +167,7 @@ function ProjectDialog({
             </div>
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-medium">图标</label>
+            <label className="text-xs font-medium">{t("projects.icon")}</label>
             <div className="flex gap-2 flex-wrap">
               {ICONS.map((i) => (
                 <button
@@ -186,7 +192,7 @@ function ProjectDialog({
             取消
           </Button>
           <Button onClick={submit} disabled={!name.trim()}>
-            {edit ? "保存" : "创建"}
+            {edit ? t("common.save") : t("projects.create")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -196,6 +202,7 @@ function ProjectDialog({
 
 export default function ProjectsPage() {
   const { t } = useLocale();
+  const { toast } = useToast();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loaded, setLoaded] = useState(false);
 
@@ -225,7 +232,7 @@ export default function ProjectsPage() {
   );
 
   const handleDelete = (id: string) => {
-    if (!confirm("确定删除此项目？所有数据将被清除。")) return;
+    if (!confirm(t("dialog.deleteProject"))) return;
     deleteProjectStorage(id);
     setProjects((prev) => prev.filter((p) => p.id !== id));
   };
@@ -233,7 +240,46 @@ export default function ProjectsPage() {
   const handleExportProject = async (project: Project) => {
     try {
       const zip = new JSZip();
-      zip.file("project.json", JSON.stringify(project, null, 2));
+      // Add all files to a files/ folder in the ZIP
+      const filesFolder = zip.folder("files");
+      const allFiles = [
+        ...project.textbooks.map((f) => ({ ...f, _type: "textbook" as const })),
+        ...project.exercises.map((f) => ({ ...f, _type: "exercise" as const })),
+        ...project.exams.map((f) => ({ ...f, _type: "exam" as const })),
+      ];
+      // Create a clean project JSON without fileData (files stored separately)
+      const cleanProject = {
+        ...project,
+        textbooks: project.textbooks.map((t) => {
+          const { fileData: _fd, ...rest } = t;
+          void _fd as unknown;
+          void _fd;
+          return { ...rest, _fileRef: t.id };
+        }),
+        exercises: project.exercises.map((e) => {
+          const { fileData: _fd, ...rest } = e;
+          void _fd as unknown;
+          void _fd;
+          return { ...rest, _fileRef: e.id };
+        }),
+        exams: project.exams.map((e) => {
+          const { fileData, ...rest } = e;
+          return { ...rest, _fileRef: e.id };
+        }),
+      };
+      zip.file("project.json", JSON.stringify(cleanProject, null, 2));
+      // Add each file's data as a separate entry
+      for (const f of allFiles) {
+        if (f.fileData) {
+          if (f.fileData.startsWith("data:")) {
+            // Save the full data URL so the MIME type is preserved
+            filesFolder?.file(f.id + ".b64", f.fileData);
+          } else {
+            // Text content
+            filesFolder?.file(f.id + ".txt", f.fileData);
+          }
+        }
+      }
       const blob = await zip.generateAsync({ type: "blob" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -242,7 +288,10 @@ export default function ProjectsPage() {
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
-      alert("导出失败: " + (e instanceof Error ? e.message : String(e)));
+      toast(
+        "Export failed: " + (e instanceof Error ? e.message : String(e)),
+        "error",
+      );
     }
   };
 
@@ -257,16 +306,44 @@ export default function ProjectsPage() {
         const zip = await JSZip.loadAsync(file);
         const jsonFile = zip.file("project.json");
         if (!jsonFile) {
-          alert("无效的项目文件：未找到 project.json");
+          toast("Invalid project file: project.json not found", "error");
           return;
         }
         const project: Project = JSON.parse(await jsonFile.async("string"));
         project.id = `proj-${Date.now()}`;
+        // Restore fileData from separate files in the ZIP
+        const restoreFiles = async (arr: Record<string, unknown>[]) => {
+          for (const item of arr) {
+            const ref = (item._fileRef as string) || item.id;
+            let fileEntry = zip.file("files/" + ref + ".b64");
+            if (fileEntry) {
+              item.fileData = await fileEntry.async("string");
+            } else {
+              fileEntry = zip.file("files/" + ref + ".txt");
+              if (fileEntry) {
+                item.fileData = await fileEntry.async("string");
+              }
+            }
+            delete item._fileRef;
+          }
+        };
+        await Promise.all([
+          restoreFiles(
+            project.textbooks as unknown as Record<string, unknown>[],
+          ),
+          restoreFiles(
+            project.exercises as unknown as Record<string, unknown>[],
+          ),
+          restoreFiles(project.exams as unknown as Record<string, unknown>[]),
+        ]);
         await saveProject(project);
         setProjects((prev) => [project, ...prev]);
-        alert(`项目"${project.name}"导入成功！`);
+        toast(`Project "${project.name}" imported successfully!`, "success");
       } catch (e) {
-        alert("导入失败: " + (e instanceof Error ? e.message : String(e)));
+        toast(
+          "Import failed: " + (e instanceof Error ? e.message : String(e)),
+          "error",
+        );
       }
     };
     input.click();
@@ -274,9 +351,9 @@ export default function ProjectsPage() {
 
   return (
     <div className="h-[calc(100vh-3.5rem)] overflow-y-auto bg-gradient-to-b from-background to-muted/20">
-      <div className="max-w-5xl mx-auto px-6 md:px-8 lg:px-10 py-8 space-y-6">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 md:px-8 lg:px-10 py-8 space-y-6">
         {/* Header */}
-        <div className="flex items-end justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-end gap-3 sm:gap-0 sm:justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
               项目管理
@@ -285,7 +362,7 @@ export default function ProjectsPage() {
               管理你的学习项目
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 self-end sm:self-auto">
             <Button variant="outline" size="sm" onClick={handleImportProject}>
               <Download className="size-4" />
               导入
@@ -305,7 +382,7 @@ export default function ProjectsPage() {
 
         {/* Content */}
         {!loaded ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
             {[1, 2].map((i) => (
               <div key={i} className="h-40 bg-muted rounded-xl animate-pulse" />
             ))}
