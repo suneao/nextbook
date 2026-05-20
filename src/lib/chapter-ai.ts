@@ -37,18 +37,20 @@ export async function analyzeChapters(
         "请分析以下教材文本，识别出所有章节（大章）和小节（小章），返回JSON格式。\n\n" +
         "要求：\n" +
         '1. 识别所有大章标题（如"第一章 xxx"、"Chapter 1 xxx"等）\n' +
-        '2. 每个大章下识别所有小节（如"1.1 xxx"、"§1.2 xxx"等）\n' +
-        "3. 如果文本中没有明确的章节标识，请根据内容主题自行划分\n" +
-        "4. 每大章的小节数量不固定，根据实际内容确定\n" +
-        "5. 所有标题必须使用简体中文输出\n\n" +
+        "2. 只识别教材正文中的知识章节，跳过答案、附录、复习题、练习、索引、目录等非教学内容\n" +
+        '3. 每个大章下识别所有小节（如"1.1 xxx"、"§1.2 xxx"等）\n' +
+        "4. 如果文本中没有明确的章节标识，请根据内容主题自行划分\n" +
+        "5. 每大章的小节数量不固定，根据实际内容确定\n" +
+        "6. 所有标题必须使用简体中文输出\n" +
+        '7. 【重要】每个小节都必须包含posMarker字段：找到该小节标题行最近的位置标记【POS_XXXXX】，返回编号（如"POS_05000"）。每个小节的posMarker都不能省略！\n\n' +
         "返回格式（严格JSON，不要markdown代码块）：\n" +
         "[\n" +
         "  {\n" +
         '    "title": "第一章：函数与极限",\n' +
         '    "order": 0,\n' +
         '    "subChapters": [\n' +
-        '      { "title": "1.1 函数的概念", "order": 0 },\n' +
-        '      { "title": "1.2 极限的定义", "order": 1 }\n' +
+        '      { "title": "1.1 函数的概念", "order": 0, "posMarker": "POS_05000" },\n' +
+        '      { "title": "1.2 极限的定义", "order": 1, "posMarker": "POS_12000" }\n' +
         "    ]\n" +
         "  }\n" +
         "]\n\n" +
@@ -61,18 +63,20 @@ export async function analyzeChapters(
         "Analyze the following textbook text, identify all chapters and sub-sections, and return JSON.\n\n" +
         "Requirements:\n" +
         '1. Identify all chapter titles (e.g. "Chapter 1: Functions", "1. Introduction")\n' +
-        '2. Under each chapter, identify all sub-sections (e.g. "1.1 Definition", "§2.1 Overview")\n' +
-        "3. If there are no explicit chapter markers, divide by content topics\n" +
-        "4. The number of sub-sections per chapter is not fixed; determine based on actual content\n" +
-        "5. ALL titles MUST be in English\n\n" +
+        "2. Only identify instructional content chapters. Skip answer keys, appendices, review exercises, practice sets, indices, tables of contents, etc.\n" +
+        '3. Under each chapter, identify all sub-sections (e.g. "1.1 Definition", "§2.1 Overview")\n' +
+        "4. If there are no explicit chapter markers, divide by content topics\n" +
+        "5. The number of sub-sections per chapter is not fixed; determine based on actual content\n" +
+        "6. ALL titles MUST be in English\n" +
+        '7. [REQUIRED] Every subchapter MUST include a posMarker field: find the nearest 【POS_XXXXX】 marker to the subchapter heading and return its number (e.g. "POS_05000"). Do NOT omit this field!\n\n' +
         "Output format (strict JSON, no markdown code block):\n" +
         "[\n" +
         "  {\n" +
         '    "title": "Chapter 1: Functions and Limits",\n' +
         '    "order": 0,\n' +
         '    "subChapters": [\n' +
-        '      { "title": "1.1 Concept of Functions", "order": 0 },\n' +
-        '      { "title": "1.2 Definition of Limits", "order": 1 }\n' +
+        '      { "title": "1.1 Concept of Functions", "order": 0, "posMarker": "POS_05000" },\n' +
+        '      { "title": "1.2 Definition of Limits", "order": 1, "posMarker": "POS_12000" }\n' +
         "    ]\n" +
         "  }\n" +
         "]\n\n" +
@@ -86,17 +90,18 @@ export async function analyzeChapters(
         "要件：\n" +
         "1. すべての大章タイトルを識別（例：「第一章 xxx」「Chapter 1 xxx」など）\n" +
         "2. 各大章の下にすべての節を識別（例：「1.1 xxx」「§1.2 xxx」など）\n" +
-        "3. テキストに明確な章の区切りがない場合は、内容のトピックに基づいて分割\n" +
-        "4. 各大章の節数は固定せず、実際の内容に基づいて決定\n" +
-        "5. すべてのタイトルを日本語で出力してください\n\n" +
+        "4. テキストに明確な章の区切りがない場合は、内容のトピックに基づいて分割\n" +
+        "5. 各大章の節数は固定せず、実際の内容に基づいて決定\n" +
+        "6. すべてのタイトルを日本語で出力してください\n" +
+        '7. テキスト内に【POS_XXXXX】のような位置マーカーがあります。各節について最も近いマーカー番号をposMarkerフィールドとして返してください（例："POS_05000"）\n\n' +
         "出力形式（厳密なJSON、マークダウンのコードブロックなし）：\n" +
         "[\n" +
         "  {\n" +
         '    "title": "第一章：関数と極限",\n' +
         '    "order": 0,\n' +
         '    "subChapters": [\n' +
-        '      { "title": "1.1 関数の概念", "order": 0 },\n' +
-        '      { "title": "1.2 極限の定義", "order": 1 }\n' +
+        '      { "title": "1.1 関数の概念", "order": 0, "posMarker": "POS_05000" },\n' +
+        '      { "title": "1.2 極限の定義", "order": 1, "posMarker": "POS_12000" }\n' +
         "    ]\n" +
         "  }\n" +
         "]\n\n" +
@@ -106,7 +111,7 @@ export async function analyzeChapters(
 
   const p = prompts[loc];
   const systemPrompt = p.system;
-  const userPrompt = p.user + pdfText.slice(0, 15000);
+  const userPrompt = p.user + pdfText;
 
   const response = await chatCompletion(
     modelId,

@@ -386,17 +386,21 @@ export default function ProjectDetailClient() {
     [project, updateProject],
   );
 
-  function extractPageRange(
-    fullText: string,
-    pageStart: number,
-    pageEnd: number,
-    totalPages: number,
-  ): string {
-    if (pageStart < 1 || pageEnd < 1 || totalPages < 1) return fullText;
-    const len = fullText.length;
-    const start = Math.floor(((pageStart - 1) / Math.max(totalPages, 1)) * len);
-    const end = Math.floor((pageEnd / Math.max(totalPages, 1)) * len);
-    return fullText.slice(Math.max(0, start), Math.min(len, end));
+  // Returns the model's max context window in tokens for dynamic segment sizing.
+  function getModelContextTokens(modelId: string): number {
+    const id = modelId.toLowerCase();
+    if (id.includes("deepseek-v4") || id.includes("deepseek-r1"))
+      return 1000000;
+    if (id.includes("deepseek")) return 128000;
+    if (id.includes("claude-3.5") || id.includes("claude-3-5")) return 200000;
+    if (id.includes("claude-3")) return 200000;
+    if (id.includes("claude")) return 100000;
+    if (id.includes("gpt-4o") || id.includes("gpt-4-turbo")) return 128000;
+    if (id.includes("gpt-4")) return 8192;
+    if (id.includes("gpt-3.5")) return 16385;
+    if (id.includes("gemini-2") || id.includes("gemini-1.5")) return 1000000;
+    if (id.includes("gemini")) return 32000;
+    return 128000;
   }
 
   const handleAIAnalyze = useCallback(async () => {
@@ -431,38 +435,155 @@ export default function ProjectDetailClient() {
       }
       const pdfText = await extractTextFromPDF(tb.fileData);
       if (controller.signal.aborted) return;
-      setAnalysisStatus(t("project.analyzingStructure"));
-      // chapters is a fresh array from the AI — we will build immutable updates
-      const rawChapters = await analyzeChapters(
-        pdfText,
-        chapterModelId,
-        controller.signal,
-        settings.language,
+
+      // Dynamically compute segment size: use 50% of model context for input.
+      // Assume ~3 chars per token. Hard-cap at 1M chars to avoid timeouts.
+      const modelContext = getModelContextTokens(chapterModelId);
+      const maxInputTokens = Math.floor(modelContext * 0.5);
+      const MARKER_INTERVAL = 10000;
+      const SEGMENT_SIZE = Math.min(
+        maxInputTokens * 3,
+        1000000,
+        pdfText.length,
       );
+      const totalSegments = Math.ceil(pdfText.length / SEGMENT_SIZE);
+
+      setAnalysisStatus(t("project.analyzingStructure"));
+
+      // Analyze chapters in segments to stay under token limits
+      let chapters: Chapter[] = [];
+
+      for (let seg = 0; seg < totalSegments; seg++) {
+        if (controller.signal.aborted) return;
+        if (totalSegments > 1) {
+          setAnalysisStatus(
+            t("project.analyzingStructure") +
+              " (" +
+              (seg + 1) +
+              "/" +
+              totalSegments +
+              ")",
+          );
+        }
+        const segStart = seg * SEGMENT_SIZE;
+        const segText = pdfText.slice(
+          segStart,
+          Math.min(segStart + SEGMENT_SIZE, pdfText.length),
+        );
+        let segMarked = "";
+        for (let p = 0; p < segText.length; p += MARKER_INTERVAL) {
+          const posLabel = String(segStart + p).padStart(6, "0");
+          segMarked += "【POS_" + posLabel + "】";
+          segMarked += segText.slice(
+            p,
+            Math.min(p + MARKER_INTERVAL, segText.length),
+          );
+        }
+        const segChapters = await analyzeChapters(
+          segMarked,
+          chapterModelId,
+          controller.signal,
+          settings.language,
+        );
+        if (controller.signal.aborted) return;
+        // Merge: check for overlapping chapters between segments
+        for (const ch of segChapters) {
+          const dup = chapters.find(
+            (existing) =>
+              existing.title === ch.title ||
+              (existing.subChapters.length > 0 &&
+                ch.subChapters.length > 0 &&
+                existing.subChapters[existing.subChapters.length - 1].title ===
+                  ch.subChapters[0].title),
+          );
+          if (dup) {
+            // Merge subchapters, avoiding duplicates at the boundary
+            const existingLast = dup.subChapters[dup.subChapters.length - 1];
+            const newFirst = ch.subChapters[0];
+            if (
+              existingLast &&
+              newFirst &&
+              existingLast.title === newFirst.title
+            ) {
+              // Overlapping boundary subchapter — skip the duplicate
+              ch.subChapters.shift();
+            }
+            for (const sc of ch.subChapters) {
+              dup.subChapters.push(sc);
+            }
+          } else {
+            ch.order = chapters.length;
+            chapters.push(ch);
+          }
+        }
+      }
+
       if (controller.signal.aborted) return;
 
-      // Working copy — rebuilt immutably after each subchapter
-      let chapters = rawChapters;
+      // Convert posMarker (e.g. "POS_05000") to textStart in the ORIGINAL pdfText
+      for (const ch of chapters) {
+        for (const sc of ch.subChapters) {
+          if (sc.posMarker) {
+            const m = sc.posMarker.match(/POS_(\d+)/);
+            if (m) {
+              sc.textStart = parseInt(m[1], 10);
+              sc.textEnd = pdfText.length;
+            }
+          }
+        }
+      }
+      // Link textEnd of each subchapter to textStart of the next
+      const allSCs = chapters.flatMap((ch) => ch.subChapters);
+      for (let i = 0; i < allSCs.length - 1; i++) {
+        if (allSCs[i].textStart != null && allSCs[i + 1].textStart != null) {
+          allSCs[i].textEnd = allSCs[i + 1].textStart;
+        }
+      }
+      // Fix broken textEnd links: cap at the next known subchapter boundary
+      for (let i = 0; i < allSCs.length; i++) {
+        const sc = allSCs[i];
+        if (sc.textStart == null) {
+          const skip = Math.floor(pdfText.length * 0.02);
+          sc.textStart =
+            skip +
+            Math.floor(
+              (i / Math.max(allSCs.length, 1)) * (pdfText.length - skip),
+            );
+        }
+        if (sc.textEnd === pdfText.length && i < allSCs.length - 1) {
+          // Look forward for the next subchapter with a known textStart
+          let found = false;
+          for (let j = i + 1; j < allSCs.length; j++) {
+            if (allSCs[j].textStart != null) {
+              sc.textEnd = allSCs[j].textStart!;
+              found = true;
+              break;
+            }
+          }
+          if (!found) {
+            sc.textEnd = Math.min(pdfText.length, sc.textStart! + 40000);
+          }
+        }
+      }
+
       setProject({ ...initialProject, chapters });
 
       let failedCount = 0;
       for (let ci = 0; ci < chapters.length; ci++) {
-        const chapterText = (
-          chapters[ci].pageStart && chapters[ci].pageEnd
-            ? extractPageRange(
-                pdfText,
-                chapters[ci].pageStart!,
-                chapters[ci].pageEnd!,
-                tb.totalPages,
-              )
-            : pdfText
-        ).slice(0, 12000);
         for (let si = 0; si < chapters[ci].subChapters.length; si++) {
           if (controller.signal.aborted) {
             setAnalysisStatus(t("project.stopped"));
             return;
           }
           const sc = chapters[ci].subChapters[si];
+          const textStart = sc.textStart ?? Math.floor(pdfText.length * 0.02);
+          const textEnd = sc.textEnd ?? pdfText.length;
+          const sliceStart = Math.max(0, textStart - MARKER_INTERVAL);
+          const sliceEnd = Math.min(
+            pdfText.length,
+            Math.max(textEnd + 500, textStart + 30000),
+          );
+          const chapterText = pdfText.slice(sliceStart, sliceEnd);
           setAnalysisStatus(
             t("project.extracting") +
               " (" +
@@ -587,8 +708,17 @@ export default function ProjectDetailClient() {
             t("project.regenerateTitle") + ": " + sc.title + "...",
           );
           try {
+            const textStart = sc.textStart ?? Math.floor(pdfText.length * 0.02);
+            const textEnd = sc.textEnd ?? pdfText.length;
+            const chapterText = pdfText.slice(
+              Math.max(0, textStart - 10000),
+              Math.min(
+                pdfText.length,
+                Math.max(textEnd + 500, textStart + 30000),
+              ),
+            );
             const knowledge = await extractKnowledgePoints(
-              pdfText,
+              chapterText,
               sc.title,
               modelId,
               controller.signal,
@@ -1545,7 +1675,7 @@ function StudyUnitViewer({
           {subChapter.knowledgePoints.map((kp, kpIdx) => (
             <div
               key={kp.id}
-              className="group rounded-xl border bg-card shadow-sm overflow-hidden"
+              className="group rounded-xl border bg-card/70 shadow-sm overflow-hidden backdrop-blur-md"
             >
               {editingKpId === kp.id ? (
                 <div className="p-5 space-y-3">
@@ -1698,7 +1828,7 @@ function StudyUnitViewer({
         <div className="space-y-3">
           {subChapter.examples.map((ex, exIdx) => (
             <Collapsible key={ex.id}>
-              <div className="group rounded-xl border bg-card shadow-sm overflow-hidden">
+              <div className="group rounded-xl border bg-card/70 shadow-sm overflow-hidden backdrop-blur-md">
                 {editingExampleId === ex.id ? (
                   <div className="p-4 space-y-3">
                     <Textarea
@@ -1860,7 +1990,7 @@ function StudyUnitViewer({
         <div className="space-y-3">
           {subChapter.exercises.map((ex, idx) => (
             <Collapsible key={ex.id}>
-              <div className="group rounded-xl border bg-card shadow-sm overflow-hidden">
+              <div className="group rounded-xl border bg-card/70 shadow-sm overflow-hidden backdrop-blur-md">
                 {editingExerciseId === ex.id ? (
                   <div className="p-4 space-y-3">
                     <Textarea

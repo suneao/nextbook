@@ -83,6 +83,9 @@ export type SubChapter = {
   knowledgePoints: KnowledgePoint[];
   examples: Example[];
   exercises: Exercise[];
+  posMarker?: string;
+  textStart?: number;
+  textEnd?: number;
 };
 
 export type AIModel = {
