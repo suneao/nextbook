@@ -252,7 +252,18 @@ export default function ProjectDetailClient() {
         const pdfTexts = await Promise.all(
           validTextbooks.map((tb) => extractTextFromPDF(tb.fileData!)),
         );
-        const pdfText = pdfTexts.join("\n\n---\n\n");
+        const fullText = pdfTexts.join("\n\n---\n\n");
+        // Slice relevant portion to avoid context overflow across textbooks
+        const PAD = 8000;
+        let pdfText = fullText;
+        if (sc.textStart != null) {
+          const start = Math.max(0, sc.textStart - PAD);
+          const end =
+            sc.textEnd != null && sc.textEnd > sc.textStart
+              ? Math.min(fullText.length, sc.textEnd + PAD)
+              : Math.min(fullText.length, sc.textStart + 50000);
+          pdfText = fullText.slice(start, end);
+        }
         const knowledge = await regenerateSubChapter(
           pdfText,
           sc.title,
@@ -441,7 +452,17 @@ export default function ProjectDetailClient() {
       const pdfTexts = await Promise.all(
         validTextbooks.map((tb) => extractTextFromPDF(tb.fileData!)),
       );
-      const pdfText = pdfTexts.join("\n\n---\n\n");
+      const pdfText = validTextbooks
+        .map((tb, i) => {
+          const label =
+            settings.language === "en-US"
+              ? `Textbook ${i + 1}: ${tb.name}`
+              : settings.language === "ja-JP"
+                ? `教科書${i + 1}：${tb.name}`
+                : `教材${i + 1}：${tb.name}`;
+          return `\n\n【${label}】\n\n${pdfTexts[i]}`;
+        })
+        .join("");
       if (controller.signal.aborted) return;
 
       // Dynamically compute segment size: use 50% of model context for input.
@@ -494,16 +515,36 @@ export default function ProjectDetailClient() {
           settings.language,
         );
         if (controller.signal.aborted) return;
-        // Merge: check for overlapping chapters between segments
+        // Merge: check for overlapping chapters between segments.
+        // Only merge if positionally adjacent — avoid conflating same-named
+        // chapters from different textbooks.
         for (const ch of segChapters) {
-          const dup = chapters.find(
-            (existing) =>
+          const newFirstSC = ch.subChapters[0];
+          const dup = chapters.find((existing) => {
+            const existingLastSC =
+              existing.subChapters[existing.subChapters.length - 1];
+            // Title-based match
+            const titleMatch =
               existing.title === ch.title ||
-              (existing.subChapters.length > 0 &&
-                ch.subChapters.length > 0 &&
-                existing.subChapters[existing.subChapters.length - 1].title ===
-                  ch.subChapters[0].title),
-          );
+              (existingLastSC &&
+                newFirstSC &&
+                existingLastSC.title === newFirstSC.title);
+            if (!titleMatch) return false;
+            // Position-based check: only merge if chapters are physically adjacent
+            if (existingLastSC?.posMarker && newFirstSC?.posMarker) {
+              const lastPos = parseInt(
+                existingLastSC.posMarker.match(/POS_(\d+)/)?.[1] ?? "0",
+                10,
+              );
+              const newPos = parseInt(
+                newFirstSC.posMarker.match(/POS_(\d+)/)?.[1] ?? "0",
+                10,
+              );
+              // Allow up to 2× SEGMENT_SIZE gap for cross-segment continuity
+              if (Math.abs(newPos - lastPos) > SEGMENT_SIZE * 2) return false;
+            }
+            return true;
+          });
           if (dup) {
             // Merge subchapters, avoiding duplicates at the boundary
             const existingLast = dup.subChapters[dup.subChapters.length - 1];
