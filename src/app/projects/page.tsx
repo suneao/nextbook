@@ -376,7 +376,7 @@ export default function ProjectsPage() {
   };
 
   return (
-    <div className="h-[calc(100vh-3.5rem)] overflow-y-auto bg-gradient-to-b from-background to-muted/20">
+    <div className="h-[calc(100vh-3.5rem)] overflow-y-auto">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 md:px-8 lg:px-10 py-8 space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-end gap-3 sm:gap-0 sm:justify-between">
@@ -519,7 +519,7 @@ export default function ProjectsPage() {
                   {/* Action menu */}
                   <div className="absolute top-3 right-3 opacity-0 group-hover/card:opacity-100 transition-opacity z-10">
                     <DropdownMenu>
-                      <DropdownMenuTrigger className="inline-flex items-center justify-center size-8 rounded-lg bg-background/80 backdrop-blur shadow-sm hover:bg-muted transition-colors">
+                      <DropdownMenuTrigger className="inline-flex items-center justify-center size-8 rounded-lg bg-background border shadow-sm hover:bg-muted transition-colors">
                         <MoreHorizontal className="size-4" />
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">

@@ -71,7 +71,7 @@ export default function ToolsPage() {
   });
 
   return (
-    <div className="h-[calc(100vh-3.5rem)] overflow-y-auto bg-gradient-to-b from-background via-background to-muted/10">
+    <div className="h-[calc(100vh-3.5rem)] overflow-y-auto">
       <div className="max-w-5xl mx-auto px-6 py-8 space-y-8">
         {/* Header */}
         <div className="space-y-4">

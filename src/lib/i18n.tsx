@@ -80,6 +80,15 @@ const dictionaries: Record<Locale, TranslationDict> = {
     "project.addKp": "添加知识点",
     "project.addExample": "添加例题",
     "project.addExercise": "添加课后习题",
+    "project.aiChat": "AI 答疑",
+    "project.currentChapter": "当前章节",
+    "project.aiNoApiKey": "请先在设置中配置AI模型和API密钥",
+    "project.aiChatPrompt": "你好！我是你的学习助手，有什么问题尽管问我。",
+    "project.aiChatHint": "可以上传PDF等文件辅助问答",
+    "project.aiThinking": "AI 正在思考...",
+    "project.aiError": "请求出错",
+    "project.aiPlaceholder": "输入你的问题...",
+    "project.uploadFile": "上传文件",
 
     // Settings
     "settings.title": "设置",
@@ -116,6 +125,11 @@ const dictionaries: Record<Locale, TranslationDict> = {
     "storage.noFiles": "暂无文件",
     "storage.noProjects": "暂无项目数据",
     "storage.usedPercent": "已使用",
+
+    // Notification
+    "notification.history": "通知历史",
+    "notification.clear": "清除",
+    "notification.empty": "暂无通知",
 
     // Common
     "common.save": "保存",
@@ -310,6 +324,18 @@ const dictionaries: Record<Locale, TranslationDict> = {
     "project.addKp": "Add Knowledge Point",
     "project.addExample": "Add Example",
     "project.addExercise": "Add Exercise",
+    "project.aiChat": "AI Q&A",
+    "project.currentChapter": "Current Chapter",
+    "project.aiNoApiKey":
+      "Please configure your AI model and API key in settings first",
+    "project.aiChatPrompt":
+      "Hello! I'm your learning assistant. Feel free to ask me anything.",
+    "project.aiChatHint":
+      "You can upload PDF and other files for context-aware answers",
+    "project.aiThinking": "AI is thinking...",
+    "project.aiError": "Request error",
+    "project.aiPlaceholder": "Type your question...",
+    "project.uploadFile": "Upload file",
 
     "settings.title": "Settings",
     "settings.subtitle": "Manage app preferences and AI model configuration",
@@ -344,6 +370,11 @@ const dictionaries: Record<Locale, TranslationDict> = {
     "storage.noFiles": "No files",
     "storage.noProjects": "No project data",
     "storage.usedPercent": "Used",
+
+    // Notification
+    "notification.history": "Notification History",
+    "notification.clear": "Clear",
+    "notification.empty": "No notifications",
 
     "common.save": "Save",
     "common.cancel": "Cancel",
@@ -552,6 +583,16 @@ const dictionaries: Record<Locale, TranslationDict> = {
     "project.addKp": "知識ポイントを追加",
     "project.addExample": "例題を追加",
     "project.addExercise": "練習問題を追加",
+    "project.aiChat": "AI Q&A",
+    "project.currentChapter": "現在の章",
+    "project.aiNoApiKey": "設定でAIモデルとAPIキーを設定してください",
+    "project.aiChatPrompt":
+      "こんにちは！学習アシスタントです。気軽に質問してください。",
+    "project.aiChatHint": "PDFなどのファイルをアップロードして質問できます",
+    "project.aiThinking": "AIが考え中...",
+    "project.aiError": "リクエストエラー",
+    "project.aiPlaceholder": "質問を入力...",
+    "project.uploadFile": "ファイルをアップロード",
 
     "settings.title": "設定",
     "settings.subtitle": "アプリの設定とAIモデルの構成を管理",
@@ -586,6 +627,11 @@ const dictionaries: Record<Locale, TranslationDict> = {
     "storage.noFiles": "ファイルなし",
     "storage.noProjects": "プロジェクトデータなし",
     "storage.usedPercent": "使用率",
+
+    // Notification
+    "notification.history": "通知履歴",
+    "notification.clear": "クリア",
+    "notification.empty": "通知なし",
 
     "common.save": "保存",
     "common.cancel": "キャンセル",

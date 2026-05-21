@@ -70,7 +70,9 @@ export default function StoragePage() {
     setLoaded(true);
   }, []);
 
-  useEffect(() => { refresh(); }, []); // eslint-disable-line
+  useEffect(() => {
+    refresh();
+  }, []); // eslint-disable-line
   useEffect(() => {
     const t = setInterval(refresh, 5000);
     return () => clearInterval(t);
@@ -91,7 +93,7 @@ export default function StoragePage() {
   const usagePercent = quota > 0 ? Math.min(100, (usage / quota) * 100) : 0;
 
   return (
-    <div className="h-[calc(100vh-3.5rem)] overflow-y-auto bg-gradient-to-b from-background to-muted/20">
+    <div className="h-[calc(100vh-3.5rem)] overflow-y-auto">
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-end gap-3 sm:gap-0 sm:justify-between">
           <div>

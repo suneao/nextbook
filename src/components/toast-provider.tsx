@@ -17,6 +17,7 @@ import {
   AlertCircle,
   Bell,
 } from "lucide-react";
+import { useLocale } from "@/lib/i18n";
 
 type ToastType = "error" | "success" | "warning" | "info";
 
@@ -130,6 +131,7 @@ export function useToast() {
 
 export function NotificationBell() {
   const { history, clearHistory } = useToast();
+  const { t } = useLocale();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -159,13 +161,13 @@ export function NotificationBell() {
         <div className="absolute right-0 top-11 w-80 bg-card border rounded-xl shadow-2xl z-50 max-h-80 overflow-hidden flex flex-col">
           <div className="flex items-center justify-between px-4 py-2 border-b shrink-0">
             <p className="text-xs font-semibold text-muted-foreground">
-              通知历史
+              {t("notification.history")}
             </p>
             <button
               onClick={clearHistory}
               className="text-xs text-muted-foreground hover:text-foreground"
             >
-              清除
+              {t("notification.clear")}
             </button>
           </div>
           <div className="overflow-y-auto">
@@ -200,7 +202,9 @@ export function NotificationBell() {
       {open && history.length === 0 && (
         <div className="absolute right-0 top-11 w-80 bg-card border rounded-xl shadow-2xl z-50 p-6 text-center">
           <Bell className="size-6 text-muted-foreground/40 mx-auto mb-2" />
-          <p className="text-xs text-muted-foreground">暂无通知</p>
+          <p className="text-xs text-muted-foreground">
+            {t("notification.empty")}
+          </p>
         </div>
       )}
     </div>

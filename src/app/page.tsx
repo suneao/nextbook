@@ -228,7 +228,7 @@ export default function DashboardPage() {
                   color: "#f59e0b",
                   gradient: "from-amber-500/10 to-amber-600/5",
                 },
-              ].map((s) => (
+              ].map((s, i) => (
                 <Card
                   key={s.sub}
                   className="group relative overflow-hidden border-none shadow-sm hover:shadow-md transition-all duration-300"
@@ -236,17 +236,29 @@ export default function DashboardPage() {
                   <div
                     className={`absolute inset-0 bg-gradient-to-br ${s.gradient} opacity-0 group-hover:opacity-100 transition-opacity`}
                   />
-                  <CardContent className="relative flex items-center gap-4 p-4">
-                    <div
-                      className="flex size-11 shrink-0 items-center justify-center rounded-2xl"
-                      style={{ backgroundColor: s.color + "14" }}
-                    >
-                      <s.icon className="size-5" style={{ color: s.color }} />
+                  <CardContent
+                    className={`relative p-4 ${i === 3 ? "flex flex-col gap-2" : "flex items-center gap-4"}`}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div
+                        className="flex size-11 shrink-0 items-center justify-center rounded-2xl"
+                        style={{ backgroundColor: s.color + "14" }}
+                      >
+                        <s.icon className="size-5" style={{ color: s.color }} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-2xl font-bold tabular-nums">
+                          {s.val}
+                        </p>
+                        <p className="text-xs text-muted-foreground">{s.sub}</p>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-2xl font-bold tabular-nums">{s.val}</p>
-                      <p className="text-xs text-muted-foreground">{s.sub}</p>
-                    </div>
+                    {i === 3 && (
+                      <Progress
+                        value={stats.pct}
+                        className="h-1.5 rounded-full"
+                      />
+                    )}
                   </CardContent>
                 </Card>
               ))}
