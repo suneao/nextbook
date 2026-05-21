@@ -254,7 +254,7 @@ export default function ProjectDetailClient() {
         );
         const fullText = pdfTexts.join("\n\n---\n\n");
         // Slice relevant portion to avoid context overflow across textbooks
-        const PAD = 8000;
+        const PAD = 2000;
         let pdfText = fullText;
         if (sc.textStart != null) {
           const start = Math.max(0, sc.textStart - PAD);
@@ -627,10 +627,10 @@ export default function ProjectDetailClient() {
           const sc = chapters[ci].subChapters[si];
           const textStart = sc.textStart ?? Math.floor(pdfText.length * 0.02);
           const textEnd = sc.textEnd ?? pdfText.length;
-          const sliceStart = Math.max(0, textStart - MARKER_INTERVAL);
+          const sliceStart = Math.max(0, textStart - 500);
           const sliceEnd = Math.min(
             pdfText.length,
-            Math.max(textEnd + 500, textStart + 30000),
+            Math.max(textEnd + 500, textStart + 50000),
           );
           const chapterText = pdfText.slice(sliceStart, sliceEnd);
           setAnalysisStatus(
