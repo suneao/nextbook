@@ -237,8 +237,8 @@ export default function ProjectDetailClient() {
         toast("Please configure API Key first", "warning");
         return;
       }
-      const tb = project.textbooks[0];
-      if (!tb.fileData) {
+      const validTextbooks = project.textbooks.filter((tb) => tb.fileData);
+      if (validTextbooks.length === 0) {
         toast("PDF data not found", "error");
         return;
       }
@@ -249,7 +249,10 @@ export default function ProjectDetailClient() {
           .flatMap((ch) => ch.subChapters)
           .find((s) => s.id === scId);
         if (!sc) return;
-        const pdfText = await extractTextFromPDF(tb.fileData);
+        const pdfTexts = await Promise.all(
+          validTextbooks.map((tb) => extractTextFromPDF(tb.fileData!)),
+        );
+        const pdfText = pdfTexts.join("\n\n---\n\n");
         const knowledge = await regenerateSubChapter(
           pdfText,
           sc.title,
@@ -428,12 +431,17 @@ export default function ProjectDetailClient() {
     setGeneratingToast(true);
     setAnalysisStatus(t("project.analyzingPdf"));
     try {
-      const tb = initialProject.textbooks[0];
-      if (!tb.fileData) {
+      const validTextbooks = initialProject.textbooks.filter(
+        (tb) => tb.fileData,
+      );
+      if (validTextbooks.length === 0) {
         toast("PDF data not found", "error");
         return;
       }
-      const pdfText = await extractTextFromPDF(tb.fileData);
+      const pdfTexts = await Promise.all(
+        validTextbooks.map((tb) => extractTextFromPDF(tb.fileData!)),
+      );
+      const pdfText = pdfTexts.join("\n\n---\n\n");
       if (controller.signal.aborted) return;
 
       // Dynamically compute segment size: use 50% of model context for input.
