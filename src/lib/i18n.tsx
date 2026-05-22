@@ -264,6 +264,24 @@ const dictionaries: Record<Locale, TranslationDict> = {
     "tools.search": "搜索工具...",
     "tools.count": "个工具",
     "tools.noMatch": "没有找到匹配的工具",
+
+    // About
+    "about.title": "关于 NextBook",
+    "about.description":
+      "NextBook 是一款基于 AI 的智能学习平台。上传教材 PDF，AI 自动分析章节结构、提取知识点、生成例题和习题。支持多语言（中文、英文、日文），适配桌面端和移动端。",
+    "about.aiDriven": "AI 驱动",
+    "about.multilingual": "多语言",
+    "about.openSource": "开源",
+    "about.feature1.title": "AI 章节分析",
+    "about.feature1.desc": "自动识别教材章节结构",
+    "about.feature2.title": "知识点提取",
+    "about.feature2.desc": "深度学习内容总结",
+    "about.feature3.title": "例题与习题",
+    "about.feature3.desc": "自动生成配套练习",
+    "about.feature4.title": "AI 答疑",
+    "about.feature4.desc": "随时提问即时解答",
+    "about.links": "项目链接",
+    "about.opensource": "使用的开源项目",
   },
 
   "en-US": {
@@ -529,6 +547,24 @@ const dictionaries: Record<Locale, TranslationDict> = {
     "tools.search": "Search tools...",
     "tools.count": "tools",
     "tools.noMatch": "No matching tools found",
+
+    // About
+    "about.title": "About NextBook",
+    "about.description":
+      "NextBook is an AI-powered learning platform. Upload textbook PDFs, and AI automatically analyzes chapter structure, extracts knowledge points, and generates examples and exercises. Supports multiple languages (Chinese, English, Japanese) and works on desktop and mobile.",
+    "about.aiDriven": "AI-Powered",
+    "about.multilingual": "Multilingual",
+    "about.openSource": "Open Source",
+    "about.feature1.title": "AI Chapter Analysis",
+    "about.feature1.desc": "Auto-detect textbook structure",
+    "about.feature2.title": "Knowledge Extraction",
+    "about.feature2.desc": "Deep content summarization",
+    "about.feature3.title": "Examples & Exercises",
+    "about.feature3.desc": "Auto-generate practice materials",
+    "about.feature4.title": "AI Q&A",
+    "about.feature4.desc": "Ask questions anytime",
+    "about.links": "Project Links",
+    "about.opensource": "Open Source Projects Used",
   },
 
   "ja-JP": {
@@ -773,6 +809,24 @@ const dictionaries: Record<Locale, TranslationDict> = {
     "tools.search": "ツールを検索...",
     "tools.count": "ツール",
     "tools.noMatch": "一致するツールがありません",
+
+    // About
+    "about.title": "NextBookについて",
+    "about.description":
+      "NextBookはAI搭載の学習プラットフォームです。教科書PDFをアップロードすると、AIが自動的に章構成を分析し、知識ポイントを抽出し、例題や練習問題を生成します。多言語（中国語・英語・日本語）対応、デスクトップ・モバイル対応。",
+    "about.aiDriven": "AI搭載",
+    "about.multilingual": "多言語",
+    "about.openSource": "オープンソース",
+    "about.feature1.title": "AI章分析",
+    "about.feature1.desc": "教科書の章構成を自動検出",
+    "about.feature2.title": "知識抽出",
+    "about.feature2.desc": "深い内容の要約",
+    "about.feature3.title": "例題と練習問題",
+    "about.feature3.desc": "練習素材を自動生成",
+    "about.feature4.title": "AI Q&A",
+    "about.feature4.desc": "いつでも質問可能",
+    "about.links": "プロジェクトリンク",
+    "about.opensource": "使用しているオープンソース",
   },
 };
 

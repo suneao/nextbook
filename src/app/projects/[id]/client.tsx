@@ -591,51 +591,15 @@ export default function ProjectDetailClient() {
 
       if (controller.signal.aborted) return;
 
-      // AI posMarker values are interpolated, not exact. Use them as search
-      // starting points to find the actual section position by its number.
+      // Use posMarker values directly as textStart
       const allSCsFlat = chapters.flatMap((ch) => ch.subChapters);
-      const total = allSCsFlat.length;
-      for (let i = 0; i < total; i++) {
-        const sc = allSCsFlat[i];
-        // Get rough position from posMarker, or estimate proportionally
-        let roughPos: number;
+      for (const sc of allSCsFlat) {
         if (sc.posMarker != null) {
           const raw = String(sc.posMarker);
           const m = raw.match(/POS_(\d+)/) || raw.match(/(\d+)/);
-          roughPos = m
-            ? parseInt(m[1], 10)
-            : Math.floor((i / total) * pdfText.length);
-        } else {
-          roughPos = Math.floor((i / total) * pdfText.length);
-        }
-        // Search ±20000 around roughPos for the section number (e.g. "1.1")
-        const numMatch = sc.title.match(/(\d+\.\d+)/);
-        if (numMatch) {
-          const sectionNum = numMatch[1];
-          const searchStart = Math.max(0, roughPos - 20000);
-          const searchEnd = Math.min(pdfText.length, roughPos + 20000);
-          const searchRegion = pdfText.slice(searchStart, searchEnd);
-          const localIdx = searchRegion.indexOf(sectionNum);
-          if (localIdx !== -1) {
-            sc.textStart = searchStart + localIdx;
-          } else {
-            sc.textStart = roughPos;
-          }
-        } else {
-          sc.textStart = roughPos;
+          if (m) sc.textStart = parseInt(m[1], 10);
         }
         sc.textEnd = undefined;
-      }
-      // Link textEnd: next section's textStart
-      for (let i = 0; i < total - 1; i++) {
-        if (allSCsFlat[i + 1].textStart != null) {
-          allSCsFlat[i].textEnd = allSCsFlat[i + 1].textStart!;
-        }
-      }
-      for (const sc of allSCsFlat) {
-        if (sc.textEnd == null) {
-          sc.textEnd = Math.min(pdfText.length, (sc.textStart ?? 0) + 50000);
-        }
       }
 
       setProject({ ...initialProject, chapters });
@@ -656,6 +620,9 @@ export default function ProjectDetailClient() {
             Math.max(textEnd + 500, textStart + 50000),
           );
           const chapterText = pdfText.slice(sliceStart, sliceEnd);
+          console.log(
+            `[POS] ${sc.title} textStart:${textStart} textEnd:${textEnd} preview:"${chapterText.substring(0, 100)}"`,
+          );
           setAnalysisStatus(
             t("project.extracting") +
               " (" +

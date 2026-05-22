@@ -17,6 +17,7 @@ import {
   Plus,
   Wrench,
   HelpCircle,
+  Info,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -41,6 +42,7 @@ export function AppSidebar({
     { href: "/tools", label: t("nav.tools"), icon: Wrench },
     { href: "/help", label: t("nav.help"), icon: HelpCircle },
     { href: "/settings", label: t("nav.settings"), icon: Settings },
+    { href: "/about", label: "关于", icon: Info },
   ];
 
   return (
