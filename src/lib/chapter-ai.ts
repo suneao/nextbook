@@ -19,46 +19,6 @@ function resolveLocale(locale?: string): Locale {
   return "zh-CN";
 }
 
-// ── TOC stripping ────────────────────────────────────────────────────────
-
-/** Detect and remove table of contents from the beginning of textbook text. */
-export function stripTOC(text: string): string {
-  const lines = text.split("\n");
-  const totalLines = lines.length;
-  if (totalLines < 30) return text;
-
-  const scanEnd = Math.floor(totalLines * 0.15);
-  let tocEndLine = 0;
-  let consecutiveLongLines = 0;
-  let foundBodyStart = false;
-
-  for (let i = 0; i < scanEnd; i++) {
-    const line = lines[i].trim();
-    const len = line.length;
-    const isBodyLine =
-      len > 120 ||
-      (len > 60 &&
-        !/^[\d.]+\s/.test(line) &&
-        !/^(Chapter|第.*章|目|录|前言|序|Preface|Contents|Index)/i.test(line));
-
-    if (isBodyLine) {
-      consecutiveLongLines++;
-      if (consecutiveLongLines >= 3 && !foundBodyStart) {
-        tocEndLine = Math.max(0, i - consecutiveLongLines + 1);
-        foundBodyStart = true;
-        break;
-      }
-    } else {
-      consecutiveLongLines = 0;
-    }
-  }
-
-  if (!foundBodyStart || tocEndLine === 0) return text;
-  const stripped = lines.slice(tocEndLine).join("\n");
-  if (stripped.length < text.length * 0.8) return text;
-  return stripped;
-}
-
 // ── Chapter Division ────────────────────────────────────────────────────
 
 export async function analyzeChapters(
@@ -84,7 +44,7 @@ export async function analyzeChapters(
         "2. 【关键】文本开头可能有目录，目录中会列出各章节标题。你必须忽略目录，只从正文中识别章节。\n" +
         "   posMarker必须指向正文中该小节标题第一次出现的位置标记，绝对不能指向目录区域的位置标记。\n" +
         "   判断方法：如果文本前半部分密集出现大量编号标题且篇幅很短（每个只有一行），那部分是目录，请跳过。\n" +
-        "3. 只识别教材正文中的知识章节，跳过答案、附录、复习题、练习、索引等非教学内容\n" +
+        "3. 识别教材中所有章节，包括章末复习题等——只跳过纯答案页、索引页\n" +
         '4. 每个大章下识别所有小节（如"1.1 xxx"、"§1.2 xxx"等）\n' +
         "5. 如果正文中没有明确的章节标识，请根据内容主题自行划分\n" +
         "6. 每大章的小节数量不固定，根据实际内容确定\n" +
@@ -189,8 +149,7 @@ export async function analyzeChapters(
 
   const p = prompts[loc];
   const systemPrompt = p.system;
-  const strippedText = stripTOC(pdfText);
-  const userPrompt = p.user + strippedText;
+  const userPrompt = p.user + pdfText;
 
   const response = await chatCompletion(
     modelId,

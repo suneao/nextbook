@@ -59,7 +59,6 @@ import {
   analyzeChapters,
   extractKnowledgePoints,
   regenerateSubChapter,
-  stripTOC,
 } from "@/lib/chapter-ai";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -254,7 +253,7 @@ export default function ProjectDetailClient() {
         const pdfTexts = await Promise.all(
           validTextbooks.map((tb) => extractTextFromPDF(tb.fileData!)),
         );
-        const rawText = validTextbooks
+        const fullText = validTextbooks
           .map((tb, i) => {
             const label =
               language === "en-US"
@@ -265,8 +264,6 @@ export default function ProjectDetailClient() {
             return `\n\n【${label}】\n\n${pdfTexts[i]}`;
           })
           .join("");
-        // Strip TOC to match posMarker positions from AI analysis
-        const fullText = stripTOC(rawText);
         // Slice relevant portion to avoid context overflow across textbooks
         const PAD = 2000;
         let pdfText = fullText;
@@ -816,7 +813,7 @@ export default function ProjectDetailClient() {
         const pdfTexts = await Promise.all(
           validTextbooks.map((tb) => extractTextFromPDF(tb.fileData!)),
         );
-        const rawPdfText = validTextbooks
+        const pdfText = validTextbooks
           .map((tb, i) => {
             const label =
               settings_lang === "en-US"
@@ -828,8 +825,6 @@ export default function ProjectDetailClient() {
           })
           .join("");
         if (controller.signal.aborted) return;
-
-        const pdfText = stripTOC(rawPdfText);
 
         // Build a new chapters array immutably
         let chapters = initialProject.chapters;
