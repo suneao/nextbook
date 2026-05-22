@@ -59,6 +59,7 @@ import {
   analyzeChapters,
   extractKnowledgePoints,
   regenerateSubChapter,
+  stripTOC,
 } from "@/lib/chapter-ai";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -253,7 +254,7 @@ export default function ProjectDetailClient() {
         const pdfTexts = await Promise.all(
           validTextbooks.map((tb) => extractTextFromPDF(tb.fileData!)),
         );
-        const fullText = validTextbooks
+        const rawText = validTextbooks
           .map((tb, i) => {
             const label =
               language === "en-US"
@@ -264,6 +265,8 @@ export default function ProjectDetailClient() {
             return `\n\n【${label}】\n\n${pdfTexts[i]}`;
           })
           .join("");
+        // Strip TOC to match posMarker positions from AI analysis
+        const fullText = stripTOC(rawText);
         // Slice relevant portion to avoid context overflow across textbooks
         const PAD = 2000;
         let pdfText = fullText;
@@ -471,7 +474,7 @@ export default function ProjectDetailClient() {
       const pdfTexts = await Promise.all(
         validTextbooks.map((tb) => extractTextFromPDF(tb.fileData!)),
       );
-      const pdfText = validTextbooks
+      const rawPdfText = validTextbooks
         .map((tb, i) => {
           const label =
             settings.language === "en-US"
@@ -484,7 +487,8 @@ export default function ProjectDetailClient() {
         .join("");
       if (controller.signal.aborted) return;
 
-      // Dynamically compute segment size: use 50% of model context for input.
+      // Remove TOC so positions align with AI's posMarker values
+      const pdfText = stripTOC(rawPdfText);
       // Assume ~3 chars per token. Hard-cap at 1M chars to avoid timeouts.
       const modelContext = getModelContextTokens(chapterModelId);
       const maxInputTokens = Math.floor(modelContext * 0.5);
@@ -592,50 +596,50 @@ export default function ProjectDetailClient() {
 
       if (controller.signal.aborted) return;
 
-      // Convert posMarker and endPosMarker to textStart/textEnd
-      // Validate: if marker is in TOC area (first 5%), search for title in body
-      const tocThreshold = Math.floor(pdfText.length * 0.05);
-      for (const ch of chapters) {
-        for (const sc of ch.subChapters) {
-          if (sc.posMarker != null) {
-            const raw = String(sc.posMarker);
-            const m = raw.match(/POS_(\d+)/) || raw.match(/(\d+)/);
-            if (m) {
-              let val = parseInt(m[1], 10);
-              if (val < tocThreshold) {
-                const bodyIdx = pdfText.indexOf(sc.title, tocThreshold);
-                if (bodyIdx !== -1) val = bodyIdx;
-              }
-              sc.textStart = val;
-            }
+      // AI posMarker values are interpolated, not exact. Use them as search
+      // starting points to find the actual section position by its number.
+      const allSCsFlat = chapters.flatMap((ch) => ch.subChapters);
+      const total = allSCsFlat.length;
+      for (let i = 0; i < total; i++) {
+        const sc = allSCsFlat[i];
+        // Get rough position from posMarker, or estimate proportionally
+        let roughPos: number;
+        if (sc.posMarker != null) {
+          const raw = String(sc.posMarker);
+          const m = raw.match(/POS_(\d+)/) || raw.match(/(\d+)/);
+          roughPos = m
+            ? parseInt(m[1], 10)
+            : Math.floor((i / total) * pdfText.length);
+        } else {
+          roughPos = Math.floor((i / total) * pdfText.length);
+        }
+        // Search ±20000 around roughPos for the section number (e.g. "1.1")
+        const numMatch = sc.title.match(/(\d+\.\d+)/);
+        if (numMatch) {
+          const sectionNum = numMatch[1];
+          const searchStart = Math.max(0, roughPos - 20000);
+          const searchEnd = Math.min(pdfText.length, roughPos + 20000);
+          const searchRegion = pdfText.slice(searchStart, searchEnd);
+          const localIdx = searchRegion.indexOf(sectionNum);
+          if (localIdx !== -1) {
+            sc.textStart = searchStart + localIdx;
+          } else {
+            sc.textStart = roughPos;
           }
-          if (sc.endPosMarker != null) {
-            const raw = String(sc.endPosMarker);
-            const m = raw.match(/POS_(\d+)/) || raw.match(/(\d+)/);
-            if (m) {
-              let val = parseInt(m[1], 10);
-              if (val < tocThreshold) {
-                const bodyIdx = pdfText.indexOf(sc.title, tocThreshold);
-                if (bodyIdx !== -1) val = bodyIdx + 3000;
-              }
-              sc.textEnd = val;
-            }
-          }
+        } else {
+          sc.textStart = roughPos;
+        }
+        sc.textEnd = undefined;
+      }
+      // Link textEnd: next section's textStart
+      for (let i = 0; i < total - 1; i++) {
+        if (allSCsFlat[i + 1].textStart != null) {
+          allSCsFlat[i].textEnd = allSCsFlat[i + 1].textStart!;
         }
       }
-      // Fallback: fill missing textEnd/textStart from adjacent markers
-      const allSCs = chapters.flatMap((ch) => ch.subChapters);
-      for (let i = 0; i < allSCs.length; i++) {
-        const sc = allSCs[i];
-        if (sc.textStart == null) {
-          sc.textStart = tocThreshold;
-        }
+      for (const sc of allSCsFlat) {
         if (sc.textEnd == null) {
-          if (i < allSCs.length - 1 && allSCs[i + 1].textStart != null) {
-            sc.textEnd = allSCs[i + 1].textStart!;
-          } else {
-            sc.textEnd = (sc.textStart ?? tocThreshold) + 50000;
-          }
+          sc.textEnd = Math.min(pdfText.length, (sc.textStart ?? 0) + 50000);
         }
       }
 
@@ -812,7 +816,7 @@ export default function ProjectDetailClient() {
         const pdfTexts = await Promise.all(
           validTextbooks.map((tb) => extractTextFromPDF(tb.fileData!)),
         );
-        const pdfText = validTextbooks
+        const rawPdfText = validTextbooks
           .map((tb, i) => {
             const label =
               settings_lang === "en-US"
@@ -824,6 +828,8 @@ export default function ProjectDetailClient() {
           })
           .join("");
         if (controller.signal.aborted) return;
+
+        const pdfText = stripTOC(rawPdfText);
 
         // Build a new chapters array immutably
         let chapters = initialProject.chapters;

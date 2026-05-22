@@ -19,6 +19,46 @@ function resolveLocale(locale?: string): Locale {
   return "zh-CN";
 }
 
+// ── TOC stripping ────────────────────────────────────────────────────────
+
+/** Detect and remove table of contents from the beginning of textbook text. */
+export function stripTOC(text: string): string {
+  const lines = text.split("\n");
+  const totalLines = lines.length;
+  if (totalLines < 30) return text;
+
+  const scanEnd = Math.floor(totalLines * 0.15);
+  let tocEndLine = 0;
+  let consecutiveLongLines = 0;
+  let foundBodyStart = false;
+
+  for (let i = 0; i < scanEnd; i++) {
+    const line = lines[i].trim();
+    const len = line.length;
+    const isBodyLine =
+      len > 120 ||
+      (len > 60 &&
+        !/^[\d.]+\s/.test(line) &&
+        !/^(Chapter|第.*章|目|录|前言|序|Preface|Contents|Index)/i.test(line));
+
+    if (isBodyLine) {
+      consecutiveLongLines++;
+      if (consecutiveLongLines >= 3 && !foundBodyStart) {
+        tocEndLine = Math.max(0, i - consecutiveLongLines + 1);
+        foundBodyStart = true;
+        break;
+      }
+    } else {
+      consecutiveLongLines = 0;
+    }
+  }
+
+  if (!foundBodyStart || tocEndLine === 0) return text;
+  const stripped = lines.slice(tocEndLine).join("\n");
+  if (stripped.length < text.length * 0.8) return text;
+  return stripped;
+}
+
 // ── Chapter Division ────────────────────────────────────────────────────
 
 export async function analyzeChapters(
@@ -50,8 +90,8 @@ export async function analyzeChapters(
         "6. 每大章的小节数量不固定，根据实际内容确定\n" +
         "7. 所有标题必须使用简体中文输出\n" +
         "8. 【重要】每个小节都必须包含posMarker和endPosMarker字段：\n" +
-        '   - posMarker: 正文中该小节标题之前最近的位置标记编号（如"POS_05000"）\n' +
-        '   - endPosMarker: 正文中该小节内容结束之后最近的位置标记编号（如"POS_12000"）\n' +
+        '   - posMarker: 正文中该小节标题之前最近的位置标记编号（如"POS_010000"）\n' +
+        '   - endPosMarker: 正文中该小节内容结束之后最近的位置标记编号（如"POS_020000"）\n' +
         "   - 如果是最后一个小节，endPosMarker用文本最后一个标记\n" +
         "   - 每个小节的posMarker和endPosMarker都不能省略！\n\n" +
         "返回格式（严格JSON，不要markdown代码块）：\n" +
@@ -60,8 +100,8 @@ export async function analyzeChapters(
         '    "title": "第一章：函数与极限",\n' +
         '    "order": 0,\n' +
         '    "subChapters": [\n' +
-        '      { "title": "1.1 函数的概念", "order": 0, "posMarker": "POS_05000", "endPosMarker": "POS_12000" },\n' +
-        '      { "title": "1.2 极限的定义", "order": 1, "posMarker": "POS_12000", "endPosMarker": "POS_20000" }\n' +
+        '      { "title": "1.1 函数的概念", "order": 0, "posMarker": "POS_010000", "endPosMarker": "POS_020000" },\n' +
+        '      { "title": "1.2 极限的定义", "order": 1, "posMarker": "POS_020000", "endPosMarker": "POS_030000" }\n' +
         "    ]\n" +
         "  }\n" +
         "]\n\n" +
@@ -86,8 +126,8 @@ export async function analyzeChapters(
         "6. The number of sub-sections per chapter is not fixed; determine based on actual content\n" +
         "7. ALL titles MUST be in English\n" +
         "8. [REQUIRED] Every subchapter MUST include both posMarker and endPosMarker fields:\n" +
-        '   - posMarker: the nearest 【POS_XXXXX】 marker BEFORE this subchapter heading in the BODY TEXT (e.g. "POS_05000")\n' +
-        '   - endPosMarker: the nearest 【POS_XXXXX】 marker AFTER this subchapter content ends in the BODY TEXT (e.g. "POS_12000")\n' +
+        '   - posMarker: the nearest 【POS_XXXXX】 marker BEFORE this subchapter heading in the BODY TEXT (e.g. "POS_010000")\n' +
+        '   - endPosMarker: the nearest 【POS_XXXXX】 marker AFTER this subchapter content ends in the BODY TEXT (e.g. "POS_020000")\n' +
         "   - For the last subchapter, use the final marker in the body text as endPosMarker\n" +
         "   - Do NOT omit these fields!\n\n" +
         "Output format (strict JSON, no markdown code block):\n" +
@@ -96,8 +136,8 @@ export async function analyzeChapters(
         '    "title": "Chapter 1: Functions and Limits",\n' +
         '    "order": 0,\n' +
         '    "subChapters": [\n' +
-        '      { "title": "1.1 Concept of Functions", "order": 0, "posMarker": "POS_05000", "endPosMarker": "POS_12000" },\n' +
-        '      { "title": "1.2 Definition of Limits", "order": 1, "posMarker": "POS_12000", "endPosMarker": "POS_20000" }\n' +
+        '      { "title": "1.1 Concept of Functions", "order": 0, "posMarker": "POS_010000", "endPosMarker": "POS_020000" },\n' +
+        '      { "title": "1.2 Definition of Limits", "order": 1, "posMarker": "POS_020000", "endPosMarker": "POS_030000" }\n' +
         "    ]\n" +
         "  }\n" +
         "]\n\n" +
@@ -123,8 +163,8 @@ export async function analyzeChapters(
         "5. 各大章の節数は固定せず、実際の内容に基づいて決定\n" +
         "6. すべてのタイトルを日本語で出力してください\n" +
         "7. 【必須】各節にはposMarkerとendPosMarkerの両方のフィールドを含めてください：\n" +
-        '   - posMarker: 本文中の節タイトルの直前にある最も近い【POS_XXXXX】マーカー番号（例："POS_05000"）\n' +
-        '   - endPosMarker: 本文中の節内容が終わった直後にある最も近い【POS_XXXXX】マーカー番号（例："POS_12000"）\n' +
+        '   - posMarker: 本文中の節タイトルの直前にある最も近い【POS_XXXXX】マーカー番号（例："POS_010000"）\n' +
+        '   - endPosMarker: 本文中の節内容が終わった直後にある最も近い【POS_XXXXX】マーカー番号（例："POS_020000"）\n' +
         "   - 最後の節の場合は、本文の最後のマーカーをendPosMarkerとして使用\n" +
         "   - これらのフィールドを省略しないでください！\n\n" +
         "出力形式（厳密なJSON、マークダウンのコードブロックなし）：\n" +
@@ -133,8 +173,8 @@ export async function analyzeChapters(
         '    "title": "第一章：関数と極限",\n' +
         '    "order": 0,\n' +
         '    "subChapters": [\n' +
-        '      { "title": "1.1 関数の概念", "order": 0, "posMarker": "POS_05000", "endPosMarker": "POS_12000" },\n' +
-        '      { "title": "1.2 極限の定義", "order": 1, "posMarker": "POS_12000", "endPosMarker": "POS_20000" }\n' +
+        '      { "title": "1.1 関数の概念", "order": 0, "posMarker": "POS_010000", "endPosMarker": "POS_020000" },\n' +
+        '      { "title": "1.2 極限の定義", "order": 1, "posMarker": "POS_020000", "endPosMarker": "POS_030000" }\n' +
         "    ]\n" +
         "  }\n" +
         "]\n\n" +
@@ -149,7 +189,8 @@ export async function analyzeChapters(
 
   const p = prompts[loc];
   const systemPrompt = p.system;
-  const userPrompt = p.user + pdfText;
+  const strippedText = stripTOC(pdfText);
+  const userPrompt = p.user + strippedText;
 
   const response = await chatCompletion(
     modelId,
