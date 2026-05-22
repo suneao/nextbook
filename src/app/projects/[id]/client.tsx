@@ -591,7 +591,7 @@ export default function ProjectDetailClient() {
 
       if (controller.signal.aborted) return;
 
-      // Use posMarker values directly as textStart
+      // Use AI's posMarker for textStart and endPosMarker for textEnd
       const allSCsFlat = chapters.flatMap((ch) => ch.subChapters);
       for (const sc of allSCsFlat) {
         if (sc.posMarker != null) {
@@ -599,7 +599,29 @@ export default function ProjectDetailClient() {
           const m = raw.match(/POS_(\d+)/) || raw.match(/(\d+)/);
           if (m) sc.textStart = parseInt(m[1], 10);
         }
-        sc.textEnd = undefined;
+        if (sc.endPosMarker != null) {
+          const raw = String(sc.endPosMarker);
+          const m = raw.match(/POS_(\d+)/) || raw.match(/(\d+)/);
+          if (m) sc.textEnd = parseInt(m[1], 10);
+        }
+      }
+      // Fallback: fill missing textEnd from next section's textStart
+      for (let i = 0; i < allSCsFlat.length - 1; i++) {
+        if (
+          allSCsFlat[i].textEnd == null &&
+          allSCsFlat[i + 1].textStart != null
+        ) {
+          allSCsFlat[i].textEnd = allSCsFlat[i + 1].textStart!;
+        }
+      }
+      // Last section: estimate end if still missing
+      for (const sc of allSCsFlat) {
+        if (sc.textStart == null) {
+          sc.textStart = Math.floor(pdfText.length * 0.05);
+        }
+        if (sc.textEnd == null) {
+          sc.textEnd = Math.min(pdfText.length, sc.textStart + 50000);
+        }
       }
 
       setProject({ ...initialProject, chapters });
@@ -620,9 +642,6 @@ export default function ProjectDetailClient() {
             Math.max(textEnd + 500, textStart + 50000),
           );
           const chapterText = pdfText.slice(sliceStart, sliceEnd);
-          console.log(
-            `[POS] ${sc.title} textStart:${textStart} textEnd:${textEnd} preview:"${chapterText.substring(0, 100)}"`,
-          );
           setAnalysisStatus(
             t("project.extracting") +
               " (" +
