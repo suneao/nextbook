@@ -10,15 +10,15 @@ function renderMarkdown(text: string): string {
 
   let html = text;
 
-  // Protect block math: $$...$$
+  // Protect block math: $$...$$ (strip newlines inside formulas)
   html = html.replace(/\$\$([\s\S]*?)\$\$/g, (_, formula) => {
-    mathBlocks.push(formula.trim());
+    mathBlocks.push(formula.replace(/\n/g, " ").trim());
     return `%%MATHBLOCK${mathBlocks.length - 1}%%`;
   });
 
-  // Protect inline math: $...$
+  // Protect inline math: $...$ (strip newlines inside formulas)
   html = html.replace(/\$(.+?)\$/g, (_, formula) => {
-    mathInlines.push(formula.trim());
+    mathInlines.push(formula.replace(/\n/g, " ").trim());
     return `%%MATHINLINE${mathInlines.length - 1}%%`;
   });
 

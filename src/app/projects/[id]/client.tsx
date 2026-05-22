@@ -30,6 +30,7 @@ import {
   Pencil,
   RotateCw,
   Check,
+  Eye,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -252,7 +253,17 @@ export default function ProjectDetailClient() {
         const pdfTexts = await Promise.all(
           validTextbooks.map((tb) => extractTextFromPDF(tb.fileData!)),
         );
-        const fullText = pdfTexts.join("\n\n---\n\n");
+        const fullText = validTextbooks
+          .map((tb, i) => {
+            const label =
+              language === "en-US"
+                ? `Textbook ${i + 1}: ${tb.name}`
+                : language === "ja-JP"
+                  ? `教科書${i + 1}：${tb.name}`
+                  : `教材${i + 1}：${tb.name}`;
+            return `\n\n【${label}】\n\n${pdfTexts[i]}`;
+          })
+          .join("");
         // Slice relevant portion to avoid context overflow across textbooks
         const PAD = 2000;
         let pdfText = fullText;
@@ -263,6 +274,13 @@ export default function ProjectDetailClient() {
               ? Math.min(fullText.length, sc.textEnd + PAD)
               : Math.min(fullText.length, sc.textStart + 50000);
           pdfText = fullText.slice(start, end);
+        } else {
+          // Fallback: skip first 5% (TOC/preface) then take a window
+          const skip = Math.floor(fullText.length * 0.05);
+          pdfText = fullText.slice(
+            skip,
+            Math.min(fullText.length, skip + 50000),
+          );
         }
         const knowledge = await regenerateSubChapter(
           pdfText,
@@ -375,8 +393,9 @@ export default function ProjectDetailClient() {
         }
         updateProject(updated);
       } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
         console.error("Upload failed:", e);
-        toast("Upload failed, please retry", "error");
+        toast("Upload failed: " + (msg || "unknown error"), "error");
       } finally {
         setUploading(false);
       }
@@ -513,6 +532,7 @@ export default function ProjectDetailClient() {
           chapterModelId,
           controller.signal,
           settings.language,
+          seg > 0 ? chapters.map((c) => c.title) : undefined,
         );
         if (controller.signal.aborted) return;
         // Merge: check for overlapping chapters between segments.
@@ -531,15 +551,18 @@ export default function ProjectDetailClient() {
                 existingLastSC.title === newFirstSC.title);
             if (!titleMatch) return false;
             // Position-based check: only merge if chapters are physically adjacent
-            if (existingLastSC?.posMarker && newFirstSC?.posMarker) {
-              const lastPos = parseInt(
-                existingLastSC.posMarker.match(/POS_(\d+)/)?.[1] ?? "0",
-                10,
-              );
-              const newPos = parseInt(
-                newFirstSC.posMarker.match(/POS_(\d+)/)?.[1] ?? "0",
-                10,
-              );
+            if (
+              existingLastSC?.posMarker != null &&
+              newFirstSC?.posMarker != null
+            ) {
+              const lastRaw = String(existingLastSC.posMarker);
+              const newRaw = String(newFirstSC.posMarker);
+              const lastMatch =
+                lastRaw.match(/POS_(\d+)/) || lastRaw.match(/(\d+)/);
+              const newMatch =
+                newRaw.match(/POS_(\d+)/) || newRaw.match(/(\d+)/);
+              const lastPos = parseInt(lastMatch?.[1] ?? "0", 10);
+              const newPos = parseInt(newMatch?.[1] ?? "0", 10);
               // Allow up to 2× SEGMENT_SIZE gap for cross-segment continuity
               if (Math.abs(newPos - lastPos) > SEGMENT_SIZE * 2) return false;
             }
@@ -569,48 +592,49 @@ export default function ProjectDetailClient() {
 
       if (controller.signal.aborted) return;
 
-      // Convert posMarker (e.g. "POS_05000") to textStart in the ORIGINAL pdfText
+      // Convert posMarker and endPosMarker to textStart/textEnd
+      // Validate: if marker is in TOC area (first 5%), search for title in body
+      const tocThreshold = Math.floor(pdfText.length * 0.05);
       for (const ch of chapters) {
         for (const sc of ch.subChapters) {
-          if (sc.posMarker) {
-            const m = sc.posMarker.match(/POS_(\d+)/);
+          if (sc.posMarker != null) {
+            const raw = String(sc.posMarker);
+            const m = raw.match(/POS_(\d+)/) || raw.match(/(\d+)/);
             if (m) {
-              sc.textStart = parseInt(m[1], 10);
-              sc.textEnd = pdfText.length;
+              let val = parseInt(m[1], 10);
+              if (val < tocThreshold) {
+                const bodyIdx = pdfText.indexOf(sc.title, tocThreshold);
+                if (bodyIdx !== -1) val = bodyIdx;
+              }
+              sc.textStart = val;
+            }
+          }
+          if (sc.endPosMarker != null) {
+            const raw = String(sc.endPosMarker);
+            const m = raw.match(/POS_(\d+)/) || raw.match(/(\d+)/);
+            if (m) {
+              let val = parseInt(m[1], 10);
+              if (val < tocThreshold) {
+                const bodyIdx = pdfText.indexOf(sc.title, tocThreshold);
+                if (bodyIdx !== -1) val = bodyIdx + 3000;
+              }
+              sc.textEnd = val;
             }
           }
         }
       }
-      // Link textEnd of each subchapter to textStart of the next
+      // Fallback: fill missing textEnd/textStart from adjacent markers
       const allSCs = chapters.flatMap((ch) => ch.subChapters);
-      for (let i = 0; i < allSCs.length - 1; i++) {
-        if (allSCs[i].textStart != null && allSCs[i + 1].textStart != null) {
-          allSCs[i].textEnd = allSCs[i + 1].textStart;
-        }
-      }
-      // Fix broken textEnd links: cap at the next known subchapter boundary
       for (let i = 0; i < allSCs.length; i++) {
         const sc = allSCs[i];
         if (sc.textStart == null) {
-          const skip = Math.floor(pdfText.length * 0.02);
-          sc.textStart =
-            skip +
-            Math.floor(
-              (i / Math.max(allSCs.length, 1)) * (pdfText.length - skip),
-            );
+          sc.textStart = tocThreshold;
         }
-        if (sc.textEnd === pdfText.length && i < allSCs.length - 1) {
-          // Look forward for the next subchapter with a known textStart
-          let found = false;
-          for (let j = i + 1; j < allSCs.length; j++) {
-            if (allSCs[j].textStart != null) {
-              sc.textEnd = allSCs[j].textStart!;
-              found = true;
-              break;
-            }
-          }
-          if (!found) {
-            sc.textEnd = Math.min(pdfText.length, sc.textStart! + 40000);
+        if (sc.textEnd == null) {
+          if (i < allSCs.length - 1 && allSCs[i + 1].textStart != null) {
+            sc.textEnd = allSCs[i + 1].textStart!;
+          } else {
+            sc.textEnd = (sc.textStart ?? tocThreshold) + 50000;
           }
         }
       }
@@ -625,7 +649,7 @@ export default function ProjectDetailClient() {
             return;
           }
           const sc = chapters[ci].subChapters[si];
-          const textStart = sc.textStart ?? Math.floor(pdfText.length * 0.02);
+          const textStart = sc.textStart ?? Math.floor(pdfText.length * 0.05);
           const textEnd = sc.textEnd ?? pdfText.length;
           const sliceStart = Math.max(0, textStart - 500);
           const sliceEnd = Math.min(
@@ -685,6 +709,49 @@ export default function ProjectDetailClient() {
       // Single final save to disk with fully-populated chapters
       if (!controller.signal.aborted) {
         await saveProject({ ...initialProject, chapters });
+        // Success notification and JSON download
+        const totalSCs = chapters.reduce(
+          (a, ch) => a + ch.subChapters.length,
+          0,
+        );
+        if (chapters.length === 0) {
+          toast("No chapters were detected in the textbook", "warning");
+        } else {
+          toast(
+            `${chapters.length} chapters, ${totalSCs} sections generated`,
+            "success",
+          );
+          // Download chapters as JSON
+          const exportData = chapters.map((ch) => ({
+            chapter: ch.title,
+            subChapters: ch.subChapters.map((sc) => ({
+              title: sc.title,
+              posMarker: sc.posMarker,
+              endPosMarker: sc.endPosMarker,
+              knowledgePoints: sc.knowledgePoints.map((kp) => ({
+                title: kp.title,
+                content: kp.content,
+              })),
+              examples: sc.examples.map((ex) => ({
+                question: ex.question,
+                solution: ex.solution,
+              })),
+              exercises: sc.exercises.map((hw) => ({
+                question: hw.question,
+                solution: hw.solution,
+              })),
+            })),
+          }));
+          const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+            type: "application/json",
+          });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `${initialProject.name}_chapters.json`;
+          a.click();
+          URL.revokeObjectURL(url);
+        }
       }
       if (failedCount > 0) {
         toast(
@@ -725,8 +792,8 @@ export default function ProjectDetailClient() {
         return;
       }
 
-      const tb = project.textbooks[0];
-      if (!tb.fileData) return;
+      const validTextbooks = project.textbooks.filter((tb) => tb.fileData);
+      if (validTextbooks.length === 0) return;
 
       const chapterIndex = project.chapters.findIndex(
         (ch) => ch.id === chapterId,
@@ -737,9 +804,25 @@ export default function ProjectDetailClient() {
       const initialProject = project;
       const controller = new AbortController();
       abortRef.current = controller;
+      const settings_lang: string =
+        JSON.parse(localStorage.getItem("nextbook-settings") || "{}")
+          .language || "zh-CN";
       setAnalyzing(true);
       try {
-        const pdfText = await extractTextFromPDF(tb.fileData);
+        const pdfTexts = await Promise.all(
+          validTextbooks.map((tb) => extractTextFromPDF(tb.fileData!)),
+        );
+        const pdfText = validTextbooks
+          .map((tb, i) => {
+            const label =
+              settings_lang === "en-US"
+                ? `Textbook ${i + 1}: ${tb.name}`
+                : settings_lang === "ja-JP"
+                  ? `教科書${i + 1}：${tb.name}`
+                  : `教材${i + 1}：${tb.name}`;
+            return `\n\n【${label}】\n\n${pdfTexts[i]}`;
+          })
+          .join("");
         if (controller.signal.aborted) return;
 
         // Build a new chapters array immutably
@@ -757,13 +840,13 @@ export default function ProjectDetailClient() {
             t("project.regenerateTitle") + ": " + sc.title + "...",
           );
           try {
-            const textStart = sc.textStart ?? Math.floor(pdfText.length * 0.02);
+            const textStart = sc.textStart ?? Math.floor(pdfText.length * 0.05);
             const textEnd = sc.textEnd ?? pdfText.length;
             const chapterText = pdfText.slice(
-              Math.max(0, textStart - 10000),
+              Math.max(0, textStart - 500),
               Math.min(
                 pdfText.length,
-                Math.max(textEnd + 500, textStart + 30000),
+                Math.max(textEnd + 500, textStart + 50000),
               ),
             );
             const knowledge = await extractKnowledgePoints(
@@ -1591,6 +1674,7 @@ function StudyUnitViewer({
   onUpdate: (updated: SubChapter) => void;
 }) {
   const { t: tv } = useLocale();
+  const [editMode, setEditMode] = useState(false);
   const [editingKpId, setEditingKpId] = useState<string | null>(null);
   const [editingExampleId, setEditingExampleId] = useState<string | null>(null);
   const [editingExerciseId, setEditingExerciseId] = useState<string | null>(
@@ -1697,16 +1781,35 @@ function StudyUnitViewer({
             </span>
           </div>
         </div>
-        <Button
-          variant={subChapter.completed ? "secondary" : "default"}
-          size="sm"
-          onClick={() => onToggleComplete(subChapter.id)}
-          className="shrink-0"
-        >
-          {subChapter.completed
-            ? tv("project.markDone")
-            : tv("project.markUndone")}
-        </Button>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setEditMode(!editMode)}
+            className="gap-1"
+          >
+            {editMode ? (
+              <>
+                <Eye className="size-4" />
+                {tv("common.readMode")}
+              </>
+            ) : (
+              <>
+                <Pencil className="size-4" />
+                {tv("common.editMode")}
+              </>
+            )}
+          </Button>
+          <Button
+            variant={subChapter.completed ? "secondary" : "default"}
+            size="sm"
+            onClick={() => onToggleComplete(subChapter.id)}
+          >
+            {subChapter.completed
+              ? tv("project.markDone")
+              : tv("project.markUndone")}
+          </Button>
+        </div>
       </div>
 
       {/* ── Knowledge Points ── */}
@@ -1786,13 +1889,13 @@ function StudyUnitViewer({
                         {kpIdx + 1}
                       </span>
                       <h3 className="text-base font-semibold truncate">
-                        {kp.title}
+                        <Markdown content={kp.title} inline />
                       </h3>
                     </div>
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="size-6 shrink-0 opacity-0 group-hover:opacity-100"
+                      className={`size-6 shrink-0 transition-opacity ${editMode ? "opacity-100" : "hidden"}`}
                       onClick={() => {
                         setEditKpTitle(kp.title);
                         setEditKpContent(kp.content);
@@ -1852,15 +1955,17 @@ function StudyUnitViewer({
               </div>
             </div>
           ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full border-dashed gap-1.5 text-muted-foreground hover:text-foreground"
-              onClick={() => setAddingType("kp")}
-            >
-              <Plus className="size-3.5" />
-              {tv("project.addKp")}
-            </Button>
+            editMode && (
+              <Button
+                variant="outline"
+                size="sm"
+                className={`w-full border-dashed gap-1.5 text-muted-foreground hover:text-foreground transition-opacity ${editMode ? "opacity-100" : "hidden"}`}
+                onClick={() => setAddingType("kp")}
+              >
+                <Plus className="size-3.5" />
+                {tv("project.addKp")}
+              </Button>
+            )
           )}
         </div>
       </section>
@@ -1944,7 +2049,7 @@ function StudyUnitViewer({
                       <Button
                         size="icon"
                         variant="ghost"
-                        className="size-7 shrink-0 mt-1 mr-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                        className={`size-7 shrink-0 mt-1 mr-1 transition-opacity ${editMode ? "opacity-100" : "hidden"}`}
                         onClick={() => {
                           setEditExampleQuestion(ex.question);
                           setEditExampleSolution(ex.solution);
@@ -1963,6 +2068,22 @@ function StudyUnitViewer({
                         </span>
                         <div className="flex-1 px-3 py-3.5 text-base leading-relaxed border-l border-amber-500/20">
                           <Markdown content={ex.solution} />
+                          {ex.relatedKnowledgePoints &&
+                            ex.relatedKnowledgePoints.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-3 pt-3 border-t border-amber-500/20">
+                                <span className="text-xs text-muted-foreground">
+                                  关联知识点：
+                                </span>
+                                {ex.relatedKnowledgePoints.map((kp, i) => (
+                                  <span
+                                    key={i}
+                                    className="inline-flex items-center rounded-md bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-600"
+                                  >
+                                    {kp}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                         </div>
                       </div>
                     </CollapsibleContent>
@@ -2012,15 +2133,17 @@ function StudyUnitViewer({
               </div>
             </div>
           ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full border-dashed gap-1.5 text-muted-foreground hover:text-foreground"
-              onClick={() => setAddingType("example")}
-            >
-              <Plus className="size-3.5" />
-              {tv("project.addExample")}
-            </Button>
+            editMode && (
+              <Button
+                variant="outline"
+                size="sm"
+                className={`w-full border-dashed gap-1.5 text-muted-foreground hover:text-foreground transition-opacity ${editMode ? "opacity-100" : "hidden"}`}
+                onClick={() => setAddingType("example")}
+              >
+                <Plus className="size-3.5" />
+                {tv("project.addExample")}
+              </Button>
+            )
           )}
         </div>
       </section>
@@ -2106,7 +2229,7 @@ function StudyUnitViewer({
                       <Button
                         size="icon"
                         variant="ghost"
-                        className="size-7 shrink-0 mt-1 mr-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                        className={`size-7 shrink-0 mt-1 mr-1 transition-opacity ${editMode ? "opacity-100" : "hidden"}`}
                         onClick={() => {
                           setEditExerciseQuestion(ex.question);
                           setEditExerciseSolution(ex.solution);
@@ -2125,6 +2248,22 @@ function StudyUnitViewer({
                         </span>
                         <div className="flex-1 px-3 py-3.5 text-base leading-relaxed border-l border-emerald-500/20">
                           <Markdown content={ex.solution} />
+                          {ex.relatedKnowledgePoints &&
+                            ex.relatedKnowledgePoints.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-3 pt-3 border-t border-emerald-500/20">
+                                <span className="text-xs text-muted-foreground">
+                                  关联知识点：
+                                </span>
+                                {ex.relatedKnowledgePoints.map((kp, i) => (
+                                  <span
+                                    key={i}
+                                    className="inline-flex items-center rounded-md bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-600"
+                                  >
+                                    {kp}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                         </div>
                       </div>
                     </CollapsibleContent>
@@ -2174,15 +2313,17 @@ function StudyUnitViewer({
               </div>
             </div>
           ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full border-dashed gap-1.5 text-muted-foreground hover:text-foreground"
-              onClick={() => setAddingType("exercise")}
-            >
-              <Plus className="size-3.5" />
-              {tv("project.addExercise")}
-            </Button>
+            editMode && (
+              <Button
+                variant="outline"
+                size="sm"
+                className={`w-full border-dashed gap-1.5 text-muted-foreground hover:text-foreground transition-opacity ${editMode ? "opacity-100" : "hidden"}`}
+                onClick={() => setAddingType("exercise")}
+              >
+                <Plus className="size-3.5" />
+                {tv("project.addExercise")}
+              </Button>
+            )
           )}
         </div>
       </section>

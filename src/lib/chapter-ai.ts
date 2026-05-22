@@ -26,8 +26,12 @@ export async function analyzeChapters(
   modelId: string,
   signal?: AbortSignal,
   locale?: string,
+  previousChapterTitles?: string[],
 ): Promise<Chapter[]> {
   const loc = resolveLocale(locale);
+  const titlesStr = previousChapterTitles?.length
+    ? previousChapterTitles.map((t) => `- ${t}`).join("\n")
+    : "";
 
   const prompts: Record<Locale, { system: string; user: string }> = {
     "zh-CN": {
@@ -37,23 +41,33 @@ export async function analyzeChapters(
         "请分析以下教材文本，识别出所有章节（大章）和小节（小章），返回JSON格式。\n\n" +
         "要求：\n" +
         '1. 识别所有大章标题（如"第一章 xxx"、"Chapter 1 xxx"等）\n' +
-        "2. 只识别教材正文中的知识章节，跳过答案、附录、复习题、练习、索引、目录等非教学内容\n" +
-        '3. 每个大章下识别所有小节（如"1.1 xxx"、"§1.2 xxx"等）\n' +
-        "4. 如果文本中没有明确的章节标识，请根据内容主题自行划分\n" +
-        "5. 每大章的小节数量不固定，根据实际内容确定\n" +
-        "6. 所有标题必须使用简体中文输出\n" +
-        '7. 【重要】每个小节都必须包含posMarker字段：找到该小节标题行最近的位置标记【POS_XXXXX】，返回编号（如"POS_05000"）。每个小节的posMarker都不能省略！\n\n' +
+        "2. 【关键】文本开头可能有目录，目录中会列出各章节标题。你必须忽略目录，只从正文中识别章节。\n" +
+        "   posMarker必须指向正文中该小节标题第一次出现的位置标记，绝对不能指向目录区域的位置标记。\n" +
+        "   判断方法：如果文本前半部分密集出现大量编号标题且篇幅很短（每个只有一行），那部分是目录，请跳过。\n" +
+        "3. 只识别教材正文中的知识章节，跳过答案、附录、复习题、练习、索引等非教学内容\n" +
+        '4. 每个大章下识别所有小节（如"1.1 xxx"、"§1.2 xxx"等）\n' +
+        "5. 如果正文中没有明确的章节标识，请根据内容主题自行划分\n" +
+        "6. 每大章的小节数量不固定，根据实际内容确定\n" +
+        "7. 所有标题必须使用简体中文输出\n" +
+        "8. 【重要】每个小节都必须包含posMarker和endPosMarker字段：\n" +
+        '   - posMarker: 正文中该小节标题之前最近的位置标记编号（如"POS_05000"）\n' +
+        '   - endPosMarker: 正文中该小节内容结束之后最近的位置标记编号（如"POS_12000"）\n' +
+        "   - 如果是最后一个小节，endPosMarker用文本最后一个标记\n" +
+        "   - 每个小节的posMarker和endPosMarker都不能省略！\n\n" +
         "返回格式（严格JSON，不要markdown代码块）：\n" +
         "[\n" +
         "  {\n" +
         '    "title": "第一章：函数与极限",\n' +
         '    "order": 0,\n' +
         '    "subChapters": [\n' +
-        '      { "title": "1.1 函数的概念", "order": 0, "posMarker": "POS_05000" },\n' +
-        '      { "title": "1.2 极限的定义", "order": 1, "posMarker": "POS_12000" }\n' +
+        '      { "title": "1.1 函数的概念", "order": 0, "posMarker": "POS_05000", "endPosMarker": "POS_12000" },\n' +
+        '      { "title": "1.2 极限的定义", "order": 1, "posMarker": "POS_12000", "endPosMarker": "POS_20000" }\n' +
         "    ]\n" +
         "  }\n" +
         "]\n\n" +
+        (titlesStr
+          ? "前面已识别的章节标题（请保持格式一致）：\n" + titlesStr + "\n\n"
+          : "") +
         "教材文本：\n",
     },
     "en-US": {
@@ -63,23 +77,35 @@ export async function analyzeChapters(
         "Analyze the following textbook text, identify all chapters and sub-sections, and return JSON.\n\n" +
         "Requirements:\n" +
         '1. Identify all chapter titles (e.g. "Chapter 1: Functions", "1. Introduction")\n' +
-        "2. Only identify instructional content chapters. Skip answer keys, appendices, review exercises, practice sets, indices, tables of contents, etc.\n" +
-        '3. Under each chapter, identify all sub-sections (e.g. "1.1 Definition", "§2.1 Overview")\n' +
-        "4. If there are no explicit chapter markers, divide by content topics\n" +
-        "5. The number of sub-sections per chapter is not fixed; determine based on actual content\n" +
-        "6. ALL titles MUST be in English\n" +
-        '7. [REQUIRED] Every subchapter MUST include a posMarker field: find the nearest 【POS_XXXXX】 marker to the subchapter heading and return its number (e.g. "POS_05000"). Do NOT omit this field!\n\n' +
+        "2. [CRITICAL] The text may contain a Table of Contents at the beginning listing chapter titles. IGNORE the TOC entirely — only identify chapters from the body text.\n" +
+        "   posMarker MUST point to where the section title first appears in the body text, NEVER to TOC area markers.\n" +
+        "   How to detect TOC: a dense cluster of numbered titles early in the text, each very short (one line), is the TOC — skip it.\n" +
+        "3. Only identify instructional content chapters. Skip answer keys, appendices, review exercises, practice sets, indices, tables of contents, etc.\n" +
+        '4. Under each chapter, identify all sub-sections (e.g. "1.1 Definition", "§2.1 Overview")\n' +
+        "5. If there are no explicit chapter markers in the body text, divide by content topics\n" +
+        "6. The number of sub-sections per chapter is not fixed; determine based on actual content\n" +
+        "7. ALL titles MUST be in English\n" +
+        "8. [REQUIRED] Every subchapter MUST include both posMarker and endPosMarker fields:\n" +
+        '   - posMarker: the nearest 【POS_XXXXX】 marker BEFORE this subchapter heading in the BODY TEXT (e.g. "POS_05000")\n' +
+        '   - endPosMarker: the nearest 【POS_XXXXX】 marker AFTER this subchapter content ends in the BODY TEXT (e.g. "POS_12000")\n' +
+        "   - For the last subchapter, use the final marker in the body text as endPosMarker\n" +
+        "   - Do NOT omit these fields!\n\n" +
         "Output format (strict JSON, no markdown code block):\n" +
         "[\n" +
         "  {\n" +
         '    "title": "Chapter 1: Functions and Limits",\n' +
         '    "order": 0,\n' +
         '    "subChapters": [\n' +
-        '      { "title": "1.1 Concept of Functions", "order": 0, "posMarker": "POS_05000" },\n' +
-        '      { "title": "1.2 Definition of Limits", "order": 1, "posMarker": "POS_12000" }\n' +
+        '      { "title": "1.1 Concept of Functions", "order": 0, "posMarker": "POS_05000", "endPosMarker": "POS_12000" },\n' +
+        '      { "title": "1.2 Definition of Limits", "order": 1, "posMarker": "POS_12000", "endPosMarker": "POS_20000" }\n' +
         "    ]\n" +
         "  }\n" +
         "]\n\n" +
+        (titlesStr
+          ? "Previously identified chapter titles (maintain consistent formatting):\n" +
+            titlesStr +
+            "\n\n"
+          : "") +
         "Textbook text:\n",
     },
     "ja-JP": {
@@ -89,22 +115,34 @@ export async function analyzeChapters(
         "以下の教材テキストを分析し、すべての章（大章）と節（小章）を識別してJSON形式で返してください。\n\n" +
         "要件：\n" +
         "1. すべての大章タイトルを識別（例：「第一章 xxx」「Chapter 1 xxx」など）\n" +
-        "2. 各大章の下にすべての節を識別（例：「1.1 xxx」「§1.2 xxx」など）\n" +
+        "2. 【重要】テキストの冒頭に目次がある場合があります。目次は無視し、本文からのみ章を識別してください。\n" +
+        "   posMarkerは必ず本文中の節タイトルの位置マーカーを指し、絶対に目次領域のマーカーを使用しないでください。\n" +
+        "   目次の見分け方：テキストの前半に番号付きタイトルが密集し、各行が短い（1行のみ）部分は目次です。スキップしてください。\n" +
+        "3. 各大章の下にすべての節を識別（例：「1.1 xxx」「§1.2 xxx」など）\n" +
         "4. テキストに明確な章の区切りがない場合は、内容のトピックに基づいて分割\n" +
         "5. 各大章の節数は固定せず、実際の内容に基づいて決定\n" +
         "6. すべてのタイトルを日本語で出力してください\n" +
-        '7. テキスト内に【POS_XXXXX】のような位置マーカーがあります。各節について最も近いマーカー番号をposMarkerフィールドとして返してください（例："POS_05000"）\n\n' +
+        "7. 【必須】各節にはposMarkerとendPosMarkerの両方のフィールドを含めてください：\n" +
+        '   - posMarker: 本文中の節タイトルの直前にある最も近い【POS_XXXXX】マーカー番号（例："POS_05000"）\n' +
+        '   - endPosMarker: 本文中の節内容が終わった直後にある最も近い【POS_XXXXX】マーカー番号（例："POS_12000"）\n' +
+        "   - 最後の節の場合は、本文の最後のマーカーをendPosMarkerとして使用\n" +
+        "   - これらのフィールドを省略しないでください！\n\n" +
         "出力形式（厳密なJSON、マークダウンのコードブロックなし）：\n" +
         "[\n" +
         "  {\n" +
         '    "title": "第一章：関数と極限",\n' +
         '    "order": 0,\n' +
         '    "subChapters": [\n' +
-        '      { "title": "1.1 関数の概念", "order": 0, "posMarker": "POS_05000" },\n' +
-        '      { "title": "1.2 極限の定義", "order": 1, "posMarker": "POS_12000" }\n' +
+        '      { "title": "1.1 関数の概念", "order": 0, "posMarker": "POS_05000", "endPosMarker": "POS_12000" },\n' +
+        '      { "title": "1.2 極限の定義", "order": 1, "posMarker": "POS_12000", "endPosMarker": "POS_20000" }\n' +
         "    ]\n" +
         "  }\n" +
         "]\n\n" +
+        (titlesStr
+          ? "以前に識別された章タイトル（一貫したフォーマットを維持してください）：\n" +
+            titlesStr +
+            "\n\n"
+          : "") +
         "教材テキスト：\n",
     },
   };
@@ -154,16 +192,21 @@ export async function extractKnowledgePoints(
         "- 每个知识点必须包含200字以上的详细说明\n" +
         "- 禁止使用Markdown标题格式（# ## ###），内容中使用**加粗**、*斜体*、==荧光高亮==强调重点\n" +
         "- 每个知识点应包含：概念定义、核心性质、推导过程（如有）、典型应用场景、记忆技巧\n" +
-        "- 公式必须使用LaTeX：行内 $...$，块级 $...$（独占一行）\n" +
+        "- 公式必须使用LaTeX：行内 $...$，块级 $$...$$（独占一行）\n" +
+        "- 【禁止】公式内部绝对不能换行！所有数学表达式必须写在同一行中，否则渲染会失败\n" +
         "- 分数 \\frac{}{}，根号 \\sqrt{}，积分 \\int，求和 \\sum，极限 \\lim\n" +
         "- 知识点数量：3-6个，确保覆盖完整\n" +
         "- 所有内容必须使用简体中文\n\n" +
         "【例题要求 - 务必完整】\n" +
-        "- 每题必须包含完整的解答步骤，每步都要说明原因\n" +
+        "- 每题必须包含完整的解答步骤，使用 **第1步：**、**第2步：** 等格式标注每一步\n" +
+        "- 每步都要说明依据的定理或性质，如：**分析思路：**、**证明过程：**、**代入计算：**\n" +
+        "- 解答最后用一行 **答案：** 给出最终结论\n" +
         "- 题目和解答中使用 $...$ 包裹所有数学公式\n" +
+        "- 每题需包含 relatedKnowledgePoints 数组，列出本题涉及的知识点名称（与上文提取的知识点标题对应）\n" +
         "- 例题数量：2-4道，从易到难\n\n" +
         "【课后习题要求】\n" +
-        "- 每题必须包含详细解答\n" +
+        "- 每题必须包含详细解答，结构与例题相同（分步骤、有答案）\n" +
+        "- 每题需包含 relatedKnowledgePoints 数组\n" +
         "- 习题数量：1-3道\n\n" +
         "返回格式（严格JSON，不要markdown代码块）：\n" +
         "{\n" +
@@ -171,10 +214,10 @@ export async function extractKnowledgePoints(
         '    { "title": "知识点标题", "content": "详细说明（公式用$...$格式）" }\n' +
         "  ],\n" +
         '  "examples": [\n' +
-        '    { "question": "题目（公式用$...$格式）", "solution": "解答步骤（公式用$...$格式）" }\n' +
+        '    { "question": "题目（公式用$...$格式）", "solution": "解答（分步骤，公式用$...$格式）", "relatedKnowledgePoints": ["知识点1", "知识点2"] }\n' +
         "  ],\n" +
         '  "exercises": [\n' +
-        '    { "question": "题目内容", "solution": "解答步骤" }\n' +
+        '    { "question": "题目内容", "solution": "解答", "relatedKnowledgePoints": ["知识点1"] }\n' +
         "  ]\n" +
         "}\n\n" +
         "教材文本：\n",
@@ -190,15 +233,20 @@ export async function extractKnowledgePoints(
         "- Do NOT use Markdown heading format (# ## ###). Use **bold**, *italic*, ==highlight== for emphasis\n" +
         "- Each knowledge point should include: definition, key properties, derivations (if any), typical applications, memory tips\n" +
         "- Use LaTeX for formulas: inline $...$, block $$...$$\n" +
+        "- [FORBIDDEN] Never put line breaks inside math formulas! All math expressions must be on a single line, otherwise rendering will fail\n" +
         "- Fractions \\frac{}{}, roots \\sqrt{}, integrals \\int, sums \\sum, limits \\lim\n" +
         "- Number of knowledge points: 3-6, ensure complete coverage\n" +
         "- ALL content MUST be in English\n\n" +
         "【Examples - Must be complete】\n" +
-        "- Each example must include complete step-by-step solutions with explanations for each step\n" +
+        "- Each example must include complete step-by-step solutions, labeled as **Step 1:**, **Step 2:**, etc.\n" +
+        "- Each step must explain the reasoning: **Analysis:**, **Proof:**, **Calculation:**\n" +
+        "- End with **Answer:** giving the final result\n" +
         "- Wrap all math formulas in $...$\n" +
+        "- Each example must include a relatedKnowledgePoints array listing the knowledge point names this problem relates to\n" +
         "- Number of examples: 2-4, from easy to hard\n\n" +
         "【Exercises】\n" +
-        "- Each exercise must include a detailed solution\n" +
+        "- Each exercise must include a detailed solution, same structure as examples (step-by-step with answer)\n" +
+        "- Each exercise must include a relatedKnowledgePoints array\n" +
         "- Number of exercises: 1-3\n\n" +
         "Output format (strict JSON, no markdown code block):\n" +
         "{\n" +
@@ -206,10 +254,10 @@ export async function extractKnowledgePoints(
         '    { "title": "Knowledge point title", "content": "Detailed explanation (use $...$ for formulas)" }\n' +
         "  ],\n" +
         '  "examples": [\n' +
-        '    { "question": "Problem (use $...$ for formulas)", "solution": "Solution steps (use $...$ for formulas)" }\n' +
+        '    { "question": "Problem (use $...$ for formulas)", "solution": "Solution (step-by-step, use $...$)", "relatedKnowledgePoints": ["KP1", "KP2"] }\n' +
         "  ],\n" +
         '  "exercises": [\n' +
-        '    { "question": "Problem", "solution": "Solution" }\n' +
+        '    { "question": "Problem", "solution": "Solution", "relatedKnowledgePoints": ["KP1"] }\n' +
         "  ]\n" +
         "}\n\n" +
         "Textbook text:\n",
@@ -225,15 +273,20 @@ export async function extractKnowledgePoints(
         "- Markdownの見出し形式（# ## ###）は禁止。**太字**、*斜体*、==ハイライト==で強調\n" +
         "- 各知識ポイントに含める：概念の定義、核心的性質、導出過程（あれば）、典型的な応用場面、記憶のコツ\n" +
         "- 数式はLaTeXを使用：インライン $...$、ブロック $$...$$\n" +
+        "- 【禁止】数式の内部で絶対に改行しないでください！すべての数式は1行で記述しなければレンダリングが失敗します\n" +
         "- 分数 \\frac{}{}、ルート \\sqrt{}、積分 \\int、和 \\sum、極限 \\lim\n" +
         "- 知識ポイント数：3〜6個、完全なカバレッジを確保\n" +
         "- すべての内容を日本語で出力すること\n\n" +
         "【例題 - 完全必須】\n" +
-        "- 各例題は完全な解答ステップを含め、各ステップの理由を説明\n" +
+        "- 各例題は **第1步：**、**第2步：** のようにステップ分けして完全な解答を含めること\n" +
+        "- 各ステップで **分析：**、**証明：**、**計算：** のように根拠を説明\n" +
+        "- 最後に **答案：** で最終結論を示す\n" +
         "- 数式は $...$ で囲む\n" +
+        "- 各例題に関連する知識ポイントの名前を relatedKnowledgePoints 配列で含めること\n" +
         "- 例題数：2〜4問、易から難へ\n\n" +
         "【練習問題】\n" +
-        "- 各問題に詳細な解答を含める\n" +
+        "- 各問題に詳細な解答を含め、例題と同じ構造（ステップ分け・答案付き）\n" +
+        "- 各問題に relatedKnowledgePoints 配列を含めること\n" +
         "- 問題数：1〜3問\n\n" +
         "出力形式（厳密なJSON、マークダウンのコードブロックなし）：\n" +
         "{\n" +
@@ -241,10 +294,10 @@ export async function extractKnowledgePoints(
         '    { "title": "知識ポイントのタイトル", "content": "詳細な説明（数式は$...$形式）" }\n' +
         "  ],\n" +
         '  "examples": [\n' +
-        '    { "question": "問題（数式は$...$形式）", "solution": "解答ステップ（数式は$...$形式）" }\n' +
+        '    { "question": "問題（数式は$...$形式）", "solution": "解答（ステップ分け、数式は$...$形式）", "relatedKnowledgePoints": ["KP1", "KP2"] }\n' +
         "  ],\n" +
         '  "exercises": [\n' +
-        '    { "question": "問題内容", "solution": "解答ステップ" }\n' +
+        '    { "question": "問題内容", "solution": "解答", "relatedKnowledgePoints": ["KP1"] }\n' +
         "  ]\n" +
         "}\n\n" +
         "教材テキスト：\n",
@@ -254,7 +307,7 @@ export async function extractKnowledgePoints(
   const p = prompts[loc];
   const systemPrompt = p.system;
   const userPrompt =
-    p.userPrefix + subChapterTitle + p.userSuffix + pdfText.slice(0, 10000);
+    p.userPrefix + subChapterTitle + p.userSuffix + pdfText.slice(0, 30000);
 
   const response = await chatCompletion(
     modelId,
@@ -296,7 +349,7 @@ export async function regenerateSubChapter(
       userSuffix:
         "\n\n请根据上述改进要求优化生成的内容。\n\n" +
         "重要：禁止使用Markdown标题格式（# ## ###），请用**加粗**、*斜体*、==荧光高亮==；" +
-        "所有数学公式请使用LaTeX格式：行内公式用 $...$，块级用 $$...$$。\n\n" +
+        "所有数学公式请使用LaTeX格式：行内公式用 $...$，块级用 $$...$$。公式内部绝对不能换行！\n\n" +
         "返回格式（严格JSON，不要markdown代码块）：\n" +
         "{\n" +
         '  "knowledgePoints": [{ "title": "...", "content": "..." }],\n' +
@@ -313,7 +366,7 @@ export async function regenerateSubChapter(
       userSuffix:
         "\n\nPlease optimize the generated content based on the above requirements.\n\n" +
         "Important: Do NOT use Markdown heading format (# ## ###). Use **bold**, *italic*, ==highlight==. " +
-        "Use LaTeX for all math formulas: inline $...$, block $$...$$.\n\n" +
+        "Use LaTeX for all math formulas: inline $...$, block $$...$$. Never put line breaks inside formulas!\n\n" +
         "Output format (strict JSON, no markdown code block):\n" +
         "{\n" +
         '  "knowledgePoints": [{ "title": "...", "content": "..." }],\n' +
@@ -330,7 +383,7 @@ export async function regenerateSubChapter(
       userSuffix:
         "\n\n上記の改善要件に基づいて生成コンテンツを最適化してください。\n\n" +
         "重要：Markdownの見出し形式（# ## ###）は禁止。**太字**、*斜体*、==ハイライト==を使用。\n" +
-        "すべての数式はLaTeX形式：インライン $...$、ブロック $$...$$。\n\n" +
+        "すべての数式はLaTeX形式：インライン $...$、ブロック $$...$$。数式内部で絶対に改行しないでください！\n\n" +
         "出力形式（厳密なJSON、マークダウンのコードブロックなし）：\n" +
         "{\n" +
         '  "knowledgePoints": [{ "title": "...", "content": "..." }],\n' +
@@ -349,7 +402,7 @@ export async function regenerateSubChapter(
     p.userMid +
     instructions +
     p.userSuffix +
-    pdfText.slice(0, 10000);
+    pdfText.slice(0, 30000);
 
   const response = await chatCompletion(
     modelId,
@@ -542,6 +595,9 @@ function parseChapterResponse(response: string): Chapter[] {
         knowledgePoints: [],
         examples: [],
         exercises: [],
+        posMarker: sc.posMarker != null ? String(sc.posMarker) : undefined,
+        endPosMarker:
+          sc.endPosMarker != null ? String(sc.endPosMarker) : undefined,
       })),
     };
     return chapter;
@@ -653,12 +709,26 @@ function parseKnowledgeResponse(response: string): {
     id: "ex-ai-" + Date.now() + "-" + i,
     question: String((ex as Record<string, unknown>).question || ""),
     solution: String((ex as Record<string, unknown>).solution || ""),
+    relatedKnowledgePoints: Array.isArray(
+      (ex as Record<string, unknown>).relatedKnowledgePoints,
+    )
+      ? (
+          (ex as Record<string, unknown>).relatedKnowledgePoints as string[]
+        ).map(String)
+      : undefined,
   }));
 
   const hws: Exercise[] = (raw.exercises || []).map((ex, i) => ({
     id: "hw-ai-" + Date.now() + "-" + i,
     question: String((ex as Record<string, unknown>).question || ""),
     solution: String((ex as Record<string, unknown>).solution || ""),
+    relatedKnowledgePoints: Array.isArray(
+      (ex as Record<string, unknown>).relatedKnowledgePoints,
+    )
+      ? (
+          (ex as Record<string, unknown>).relatedKnowledgePoints as string[]
+        ).map(String)
+      : undefined,
   }));
 
   return {
@@ -673,11 +743,24 @@ function parseKnowledgeResponse(response: string): {
 interface RawChapter {
   title: string;
   order: number;
-  subChapters: { title: string; order: number }[];
+  subChapters: {
+    title: string;
+    order: number;
+    posMarker?: string | number;
+    endPosMarker?: string | number;
+  }[];
 }
 
 interface RawKnowledge {
   knowledgePoints: { title: string; content: string }[];
-  examples: { question: string; solution: string }[];
-  exercises: { question: string; solution: string }[];
+  examples: {
+    question: string;
+    solution: string;
+    relatedKnowledgePoints?: string[];
+  }[];
+  exercises: {
+    question: string;
+    solution: string;
+    relatedKnowledgePoints?: string[];
+  }[];
 }

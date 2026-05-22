@@ -33,12 +33,14 @@ export type Example = {
   id: string;
   question: string;
   solution: string;
+  relatedKnowledgePoints?: string[];
 };
 
 export type Exercise = {
   id: string;
   question: string;
   solution: string;
+  relatedKnowledgePoints?: string[];
 };
 
 export type ChapterPageRange = {
@@ -84,6 +86,7 @@ export type SubChapter = {
   examples: Example[];
   exercises: Exercise[];
   posMarker?: string;
+  endPosMarker?: string;
   textStart?: number;
   textEnd?: number;
 };
