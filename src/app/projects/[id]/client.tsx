@@ -471,7 +471,7 @@ export default function ProjectDetailClient() {
       const pdfTexts = await Promise.all(
         validTextbooks.map((tb) => extractTextFromPDF(tb.fileData!)),
       );
-      const rawPdfText = validTextbooks
+      const pdfText = validTextbooks
         .map((tb, i) => {
           const label =
             settings.language === "en-US"
@@ -484,9 +484,7 @@ export default function ProjectDetailClient() {
         .join("");
       if (controller.signal.aborted) return;
 
-      // Remove TOC so positions align with AI's posMarker values
-      const pdfText = stripTOC(rawPdfText);
-      // Assume ~3 chars per token. Hard-cap at 1M chars to avoid timeouts.
+      // Dynamically compute segment size
       const modelContext = getModelContextTokens(chapterModelId);
       const maxInputTokens = Math.floor(modelContext * 0.5);
       const MARKER_INTERVAL = 10000;
