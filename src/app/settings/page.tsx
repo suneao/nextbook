@@ -418,7 +418,7 @@ export default function SettingsPage() {
   if (!loaded) return null;
 
   return (
-    <div className="h-[calc(100vh-3.5rem)] overflow-y-auto">
+    <div className="h-[calc(100vh-3.5rem)] overflow-y-auto pb-16 md:pb-0">
       <div className="mx-auto max-w-2xl w-full px-3 sm:px-4 py-4 sm:py-6 space-y-6 sm:space-y-8">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-0 sm:justify-between">

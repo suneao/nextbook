@@ -975,6 +975,16 @@ export default function ProjectDetailClient() {
       ch.subChapters.some((sc) => sc.id === selectedSubChapterId),
     ) ?? null;
 
+  // Navigation: prev/next subchapter
+  const allSubs = project?.chapters.flatMap((ch) => ch.subChapters) ?? [];
+  const currentIndex = allSubs.findIndex(
+    (sc) => sc.id === selectedSubChapterId,
+  );
+  const hasPrev = currentIndex > 0;
+  const hasNext = currentIndex >= 0 && currentIndex < allSubs.length - 1;
+  const prevId = hasPrev ? allSubs[currentIndex - 1].id : null;
+  const nextId = hasNext ? allSubs[currentIndex + 1].id : null;
+
   if (!loaded)
     return (
       <div className="flex items-center justify-center h-[calc(100vh-3.5rem)]">
@@ -1044,15 +1054,30 @@ export default function ProjectDetailClient() {
         }}
       />
 
-      {/* Left Sidebar */}
+      {/* Left Sidebar - toggle visibility on desktop, overlay on mobile */}
+      {/* Mobile overlay */}
+      {sidebarWidth > 0 && (
+        <div
+          className="md:hidden fixed inset-0 z-40"
+          onClick={() => setSidebarWidth(0)}
+        />
+      )}
       <div
         className={cn(
-          "border-r bg-card/30 flex flex-col shrink-0 relative",
+          "border-r bg-card/40 md:bg-transparent backdrop-blur-md md:backdrop-blur-none flex flex-col shrink-0",
+          "max-md:rounded-r-2xl",
           sidebarWidth === 0 && "overflow-hidden border-r-0",
+          "fixed top-14 left-0 bottom-0 z-50 md:static",
+          "transition-transform duration-300 ease-in-out md:transition-[width] md:duration-200",
+          "w-[85vw] md:w-auto",
+          sidebarWidth > 0
+            ? "translate-x-0"
+            : "-translate-x-full md:translate-x-0",
         )}
         style={{
           width: sidebarWidth,
-          minWidth: sidebarWidth === 0 ? 0 : 200,
+          minWidth: 0,
+          maxWidth: "85vw",
           transition: dragging ? "none" : "width 0.2s",
         }}
       >
@@ -1104,8 +1129,8 @@ export default function ProjectDetailClient() {
             </Button>
           </div>
         </div>
-        <div className="flex-1 overflow-y-auto">
-          <div className="p-2 space-y-3">
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className="p-2">
             {/* Chapter Tree */}
             <div>
               <div className="flex items-center justify-between px-3 mb-2 mt-1">
@@ -1177,7 +1202,9 @@ export default function ProjectDetailClient() {
                     key={chapter.id}
                     chapter={chapter}
                     selectedSubChapterId={selectedSubChapterId}
-                    onSelect={(scId) => setSelectedSubChapterId(scId)}
+                    onSelect={(scId) => {
+                      setSelectedSubChapterId(scId);
+                    }}
                     addingSubToChapterId={addingSubToChapterId}
                     newSubChapterTitle={newSubChapterTitle}
                     onNewSubChapterTitleChange={setNewSubChapterTitle}
@@ -1194,91 +1221,93 @@ export default function ProjectDetailClient() {
                 ))}
               </div>
             </div>
+          </div>
+        </div>
 
-            <Separator />
+        <Separator />
 
-            {/* Materials Section */}
-            <div className="space-y-3">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2">
-                {t("project.materials")}
-              </p>
+        {/* Materials Section with own scroll */}
+        <div className="shrink-0 overflow-y-auto max-h-[45%]">
+          <div className="p-2 space-y-3">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2">
+              {t("project.materials")}
+            </p>
 
-              {/* Textbooks */}
-              <MaterialSection
-                icon={BookOpen}
-                label={t("project.textbooks")}
-                color="text-blue-500"
-                files={project.textbooks}
-                onUpload={() => textbookInputRef.current?.click()}
-                onRemove={(id) => handleRemoveFile("textbook", id)}
-                uploading={uploading}
-                onPreviewFile={(data, name) =>
-                  setFilePreview(
-                    data
-                      ? {
-                          data,
-                          name,
-                          blobUrl: dataUrlToBlobUrl(data, name),
-                          isText: !data.startsWith("data:"),
-                        }
-                      : null,
-                  )
-                }
-              />
+            {/* Textbooks */}
+            <MaterialSection
+              icon={BookOpen}
+              label={t("project.textbooks")}
+              color="text-blue-500"
+              files={project.textbooks}
+              onUpload={() => textbookInputRef.current?.click()}
+              onRemove={(id) => handleRemoveFile("textbook", id)}
+              uploading={uploading}
+              onPreviewFile={(data, name) =>
+                setFilePreview(
+                  data
+                    ? {
+                        data,
+                        name,
+                        blobUrl: dataUrlToBlobUrl(data, name),
+                        isText: !data.startsWith("data:"),
+                      }
+                    : null,
+                )
+              }
+            />
 
-              {/* Exercises */}
-              <MaterialSection
-                icon={FileText}
-                label={t("project.exercises")}
-                color="text-amber-500"
-                files={project.exercises}
-                onUpload={() => exerciseInputRef.current?.click()}
-                onRemove={(id) => handleRemoveFile("exercise", id)}
-                uploading={uploading}
-                onPreviewFile={(data, name) =>
-                  setFilePreview(
-                    data
-                      ? {
-                          data,
-                          name,
-                          blobUrl: dataUrlToBlobUrl(data, name),
-                          isText: !data.startsWith("data:"),
-                        }
-                      : null,
-                  )
-                }
-              />
+            {/* Exercises */}
+            <MaterialSection
+              icon={FileText}
+              label={t("project.exercises")}
+              color="text-amber-500"
+              files={project.exercises}
+              onUpload={() => exerciseInputRef.current?.click()}
+              onRemove={(id) => handleRemoveFile("exercise", id)}
+              uploading={uploading}
+              onPreviewFile={(data, name) =>
+                setFilePreview(
+                  data
+                    ? {
+                        data,
+                        name,
+                        blobUrl: dataUrlToBlobUrl(data, name),
+                        isText: !data.startsWith("data:"),
+                      }
+                    : null,
+                )
+              }
+            />
 
-              {/* Exams */}
-              <MaterialSection
-                icon={GraduationCap}
-                label={t("project.exams")}
-                color="text-violet-500"
-                files={project.exams}
-                onUpload={() => examInputRef.current?.click()}
-                onRemove={(id) => handleRemoveFile("exam", id)}
-                uploading={uploading}
-                onPreviewFile={(data, name) =>
-                  setFilePreview(
-                    data
-                      ? {
-                          data,
-                          name,
-                          blobUrl: dataUrlToBlobUrl(data, name),
-                          isText: !data.startsWith("data:"),
-                        }
-                      : null,
-                  )
-                }
-              />
-            </div>
+            {/* Exams */}
+            <MaterialSection
+              icon={GraduationCap}
+              label={t("project.exams")}
+              color="text-violet-500"
+              files={project.exams}
+              onUpload={() => examInputRef.current?.click()}
+              onRemove={(id) => handleRemoveFile("exam", id)}
+              uploading={uploading}
+              onPreviewFile={(data, name) =>
+                setFilePreview(
+                  data
+                    ? {
+                        data,
+                        name,
+                        blobUrl: dataUrlToBlobUrl(data, name),
+                        isText: !data.startsWith("data:"),
+                      }
+                    : null,
+                )
+              }
+            />
           </div>
         </div>
       </div>
 
       {/* Center: Study Viewer */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <div className="shrink-0 flex items-center gap-2 px-4 py-2 border-b bg-card/30">
+        <div className="shrink-0 flex items-center gap-2 px-4 py-2 border-b bg-card/40 backdrop-blur-md min-h-[41px]">
           {sidebarWidth === 0 && (
             <Button
               variant="ghost"
@@ -1341,11 +1370,21 @@ export default function ProjectDetailClient() {
         ) : (
           <ScrollArea className="flex-1 h-full">
             {selectedSubChapter ? (
-              <StudyUnitViewer
-                subChapter={selectedSubChapter}
-                onToggleComplete={toggleComplete}
-                onUpdate={handleUpdateSubChapter}
-              />
+              <>
+                <StudyUnitViewer
+                  subChapter={selectedSubChapter}
+                  onToggleComplete={toggleComplete}
+                  onUpdate={handleUpdateSubChapter}
+                  hasPrev={hasPrev}
+                  hasNext={hasNext}
+                  onPrev={
+                    prevId ? () => setSelectedSubChapterId(prevId) : undefined
+                  }
+                  onNext={
+                    nextId ? () => setSelectedSubChapterId(nextId) : undefined
+                  }
+                />
+              </>
             ) : (
               <div className="flex flex-col items-center justify-center py-24 text-center">
                 <BookOpen className="size-10 text-muted-foreground mb-3" />
@@ -1378,7 +1417,7 @@ export default function ProjectDetailClient() {
 
       {!chatOpen && (
         <button
-          className="fixed bottom-6 right-6 z-40 size-12 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/80 transition-colors"
+          className="fixed bottom-20 md:bottom-6 right-4 md:right-6 z-40 size-11 md:size-12 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/80 transition-colors"
           onClick={() => setChatOpen(true)}
           aria-label={t("project.openAiChat")}
         >
@@ -1512,7 +1551,7 @@ function ChapterTreeNode({
 
   return (
     <Collapsible defaultOpen>
-      <div className="flex items-center gap-0.5 rounded-lg px-2 py-1.5 group hover:bg-muted/50 transition-colors">
+      <div className="flex items-center gap-0.5 rounded-lg px-2 py-1.5 group hover:bg-muted/30 hover:backdrop-blur-md transition-all">
         <CollapsibleTrigger className="flex flex-1 items-center gap-1.5 text-sm font-semibold min-w-0">
           <ChevronDown className="size-4 text-muted-foreground shrink-0 transition-transform group-aria-expanded:rotate-180" />
           <span className="flex-1 text-left truncate">{chapter.title}</span>
@@ -1520,7 +1559,7 @@ function ChapterTreeNode({
         {/* Right-side area: badge+count ↔ action buttons swap on hover */}
         <div className="relative shrink-0 flex items-center">
           {/* Badge + Count — visible by default, hidden on hover */}
-          <div className="flex items-center gap-1 group-hover:opacity-0 transition-opacity">
+          <div className="flex items-center gap-1 group-hover:opacity-0 transition-opacity max-md:hidden">
             <Badge
               variant="outline"
               className={cn(
@@ -1539,7 +1578,7 @@ function ChapterTreeNode({
             )}
           </div>
           {/* Action buttons — hidden by default, visible on hover (overlays the same spot) */}
-          <div className="absolute inset-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="absolute inset-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 max-md:opacity-100 max-md:relative max-md:inset-auto transition-opacity">
             {isNative && onRegenerateChapter && (
               <button
                 type="button"
@@ -1596,10 +1635,10 @@ function ChapterTreeNode({
                 key={sc.id}
                 type="button"
                 className={cn(
-                  "flex w-full items-center gap-1.5 rounded-md px-2 py-2 text-[13px] transition-colors text-left group/sc",
+                  "flex w-full items-center gap-1.5 rounded-md px-2 py-2 text-[13px] transition-all text-left group/sc",
                   selectedSubChapterId === sc.id
-                    ? "bg-primary/10 text-primary font-medium shadow-sm border border-primary/20"
-                    : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                    ? "bg-primary/10 text-primary font-medium shadow-sm border border-primary/20 backdrop-blur-md"
+                    : "text-muted-foreground hover:bg-muted/30 hover:backdrop-blur-md hover:text-foreground",
                 )}
                 onClick={() => onSelect(sc.id)}
               >
@@ -1611,7 +1650,7 @@ function ChapterTreeNode({
                 <span className="truncate flex-1">{sc.title}</span>
                 {onDeleteSubChapter && (
                   <span
-                    className="size-5 flex items-center justify-center rounded hover:bg-red-100 dark:hover:bg-red-900/20 shrink-0 opacity-0 group-hover/sc:opacity-100 transition-opacity ml-1"
+                    className="size-5 flex items-center justify-center rounded hover:bg-red-100 dark:hover:bg-red-900/20 shrink-0 opacity-0 group-hover/sc:opacity-100 max-md:opacity-100 transition-opacity ml-1"
                     title={
                       ct("project.deleteSubChapterTitle") || "Delete section"
                     }
@@ -1667,10 +1706,18 @@ function StudyUnitViewer({
   subChapter,
   onToggleComplete,
   onUpdate,
+  hasPrev,
+  hasNext,
+  onPrev,
+  onNext,
 }: {
   subChapter: SubChapter;
   onToggleComplete: (id: string) => void;
   onUpdate: (updated: SubChapter) => void;
+  hasPrev: boolean;
+  hasNext: boolean;
+  onPrev?: () => void;
+  onNext?: () => void;
 }) {
   const { t: tv } = useLocale();
   const [editMode, setEditMode] = useState(false);
@@ -1755,7 +1802,7 @@ function StudyUnitViewer({
   };
 
   return (
-    <div className="max-w-3xl mx-auto px-8 py-8 space-y-10">
+    <div className="max-w-3xl mx-auto px-4 md:px-8 py-6 md:py-8 space-y-8 md:space-y-10">
       {/* ── Header ── */}
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-2">
@@ -2326,7 +2373,29 @@ function StudyUnitViewer({
           )}
         </div>
       </section>
-      <div className="h-16" />
+      {/* Prev/Next navigation */}
+      <div className="flex items-center justify-center gap-4 pt-2 pb-24 md:pb-10">
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!hasPrev}
+          onClick={onPrev}
+          className="gap-1 bg-background/40 backdrop-blur-md"
+        >
+          <ChevronLeft className="size-4" />
+          {tv("common.previous")}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!hasNext}
+          onClick={onNext}
+          className="gap-1 bg-background/40 backdrop-blur-md"
+        >
+          {tv("common.next")}
+          <ChevronRight className="size-4" />
+        </Button>
+      </div>
     </div>
   );
 }

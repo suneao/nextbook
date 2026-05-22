@@ -8,6 +8,7 @@ import { Analytics } from "@vercel/analytics/react";
 import { AppNav } from "@/components/app-nav";
 import { AppLayout } from "./layout-client";
 import { BackgroundBeams } from "@/components/background-beams";
+import { MobileBottomNav } from "@/components/mobile-nav";
 import { cn } from "@/lib/utils";
 import "./globals.css";
 
@@ -60,6 +61,7 @@ export default function RootLayout({
                     <div className="flex flex-1">
                       <AppLayout>{children}</AppLayout>
                     </div>
+                    <MobileBottomNav />
                   </TooltipProvider>
                 </ToastProvider>
               </LocaleProvider>

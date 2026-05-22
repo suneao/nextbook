@@ -160,8 +160,12 @@ export function AIChatPanel({
   return (
     <div
       className={cn(
-        "sticky top-14 h-[calc(100vh-3.5rem)] border-l bg-card/50 backdrop-blur transition-all duration-300 flex flex-col",
-        open ? "w-[380px]" : "w-0 overflow-hidden border-l-0",
+        "border-l bg-card/60 backdrop-blur-md transition-all duration-300 flex flex-col",
+        "max-md:fixed max-md:z-50 max-md:bottom-16 max-md:left-0 max-md:right-0 max-md:rounded-t-2xl max-md:shadow-2xl max-md:border max-md:border-border/50",
+        "md:sticky md:top-14 md:h-[calc(100vh-3.5rem)]",
+        open
+          ? "max-md:h-[50vh] md:w-[380px]"
+          : "max-md:h-0 max-md:overflow-hidden max-md:border-0 max-md:opacity-0 max-md:pointer-events-none md:w-0 md:overflow-hidden md:border-l-0",
       )}
     >
       <div className="shrink-0 px-4 py-3 border-b">
