@@ -591,38 +591,42 @@ export default function ProjectDetailClient() {
 
       if (controller.signal.aborted) return;
 
-      // Use AI's posMarker for textStart and endPosMarker for textEnd
+      // posMarker spacing indicates relative section length — proportional mapping
       const allSCsFlat = chapters.flatMap((ch) => ch.subChapters);
-      for (const sc of allSCsFlat) {
-        if (sc.posMarker != null) {
-          const raw = String(sc.posMarker);
-          const m = raw.match(/POS_(\d+)/) || raw.match(/(\d+)/);
-          if (m) sc.textStart = parseInt(m[1], 10);
-        }
-        if (sc.endPosMarker != null) {
-          const raw = String(sc.endPosMarker);
-          const m = raw.match(/POS_(\d+)/) || raw.match(/(\d+)/);
-          if (m) sc.textEnd = parseInt(m[1], 10);
-        }
+      const total = allSCsFlat.length;
+
+      // Parse posMarker values
+      const items = allSCsFlat.map((sc) => ({
+        sc,
+        pos: (() => {
+          if (sc.posMarker != null) {
+            const m =
+              String(sc.posMarker).match(/POS_(\d+)/) ||
+              String(sc.posMarker).match(/(\d+)/);
+            if (m) return parseInt(m[1], 10);
+          }
+          return -1;
+        })(),
+      }));
+      items.sort((a, b) => a.pos - b.pos);
+
+      // Map posMarker range to body text, preserving relative gaps
+      const bodyStart = Math.floor(pdfText.length * 0.05);
+      const bodyLen = pdfText.length - bodyStart;
+      const firstPos = items[0].pos;
+      const lastPos = items[total - 1].pos;
+      const posRange = Math.max(lastPos - firstPos, 1);
+      for (let i = 0; i < total; i++) {
+        const { sc, pos } = items[i];
+        const ratio = (pos - firstPos) / posRange;
+        sc.textStart = bodyStart + Math.floor(ratio * bodyLen);
+        sc.textEnd = undefined;
       }
-      // Fallback: fill missing textEnd from next section's textStart
-      for (let i = 0; i < allSCsFlat.length - 1; i++) {
-        if (
-          allSCsFlat[i].textEnd == null &&
-          allSCsFlat[i + 1].textStart != null
-        ) {
-          allSCsFlat[i].textEnd = allSCsFlat[i + 1].textStart!;
-        }
+      // Link textEnd from next section
+      for (let i = 0; i < total - 1; i++) {
+        items[i].sc.textEnd = items[i + 1].sc.textStart!;
       }
-      // Last section: estimate end if still missing
-      for (const sc of allSCsFlat) {
-        if (sc.textStart == null) {
-          sc.textStart = Math.floor(pdfText.length * 0.05);
-        }
-        if (sc.textEnd == null) {
-          sc.textEnd = Math.min(pdfText.length, sc.textStart + 50000);
-        }
-      }
+      items[total - 1].sc.textEnd = pdfText.length;
 
       setProject({ ...initialProject, chapters });
 
