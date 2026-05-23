@@ -517,9 +517,9 @@ export default function ProjectsPage() {
                     </Card>
                   </Link>
                   {/* Action menu */}
-                  <div className="absolute top-3 right-3 opacity-0 group-hover/card:opacity-100 transition-opacity z-10">
+                  <div className="absolute top-3 right-3 opacity-0 group-hover/card:opacity-100 max-md:opacity-100 transition-opacity z-10">
                     <DropdownMenu>
-                      <DropdownMenuTrigger className="inline-flex items-center justify-center size-8 rounded-lg bg-background border shadow-sm hover:bg-muted transition-colors">
+                      <DropdownMenuTrigger className="inline-flex items-center justify-center size-8 rounded-lg hover:bg-muted transition-colors">
                         <MoreHorizontal className="size-4" />
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
