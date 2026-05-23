@@ -66,7 +66,7 @@ export default function HelpPage() {
   const { t } = useLocale();
 
   return (
-    <div className="h-[calc(100vh-3.5rem)] overflow-y-auto pb-16 md:pb-0">
+    <div className="h-[calc(100dvh-3.5rem)] overflow-y-auto pb-20 md:pb-0">
       <div className="max-w-3xl mx-auto px-6 py-8 space-y-8">
         <div>
           <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">

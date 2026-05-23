@@ -93,7 +93,7 @@ export default function StoragePage() {
   const usagePercent = quota > 0 ? Math.min(100, (usage / quota) * 100) : 0;
 
   return (
-    <div className="h-[calc(100vh-3.5rem)] overflow-y-auto pb-16 md:pb-0">
+    <div className="h-[calc(100dvh-3.5rem)] overflow-y-auto pb-20 md:pb-0">
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-end gap-3 sm:gap-0 sm:justify-between">
           <div>

@@ -139,7 +139,7 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="h-[calc(100vh-3.5rem)] overflow-y-auto relative pb-16 md:pb-0">
+    <div className="h-[calc(100dvh-3.5rem)] overflow-y-auto relative pb-20 md:pb-0">
       {/* Animated Background Orbs */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
         <div className="absolute -top-1/4 -left-1/4 w-1/2 h-1/2 bg-gradient-to-br from-blue-500/10 via-violet-500/5 to-transparent rounded-full blur-3xl animate-float" />

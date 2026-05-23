@@ -21,11 +21,18 @@ export function MobileBottomNav() {
   const { t } = useLocale();
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node))
+      const t = e.target as Node;
+      if (
+        btnRef.current &&
+        !btnRef.current.contains(t) &&
+        menuRef.current &&
+        !menuRef.current.contains(t)
+      )
         setMoreOpen(false);
     };
     document.addEventListener("mousedown", handler);
@@ -42,7 +49,7 @@ export function MobileBottomNav() {
     { href: "/storage", label: t("nav.storage"), icon: HardDrive },
     { href: "/help", label: t("nav.help"), icon: HelpCircle },
     { href: "/settings", label: t("nav.settings"), icon: Settings },
-    { href: "/about", label: "关于", icon: Info },
+    { href: "/about", label: t("nav.about"), icon: Info },
   ];
 
   return (
@@ -73,7 +80,7 @@ export function MobileBottomNav() {
         })}
 
         {/* More button */}
-        <div ref={ref} className="relative flex-1 flex flex-col items-center">
+        <div ref={btnRef} className="flex-1 flex flex-col items-center">
           <button
             onClick={() => setMoreOpen(!moreOpen)}
             className={cn(
@@ -89,7 +96,10 @@ export function MobileBottomNav() {
 
           {moreOpen &&
             createPortal(
-              <div className="fixed bottom-[calc(4rem+16px+env(safe-area-inset-bottom,0px))] right-4 w-44 bg-card/40 backdrop-blur-md border rounded-xl shadow-2xl overflow-hidden z-50">
+              <div
+                ref={menuRef}
+                className="fixed bottom-[calc(4rem+16px+env(safe-area-inset-bottom,0px))] right-4 w-44 bg-card/40 backdrop-blur-md border rounded-xl shadow-2xl overflow-hidden z-50"
+              >
                 {secondaryItems.map((item) => {
                   const active =
                     pathname === item.href ||

@@ -158,6 +158,7 @@ const dictionaries: Record<Locale, TranslationDict> = {
     "nav.collapse": "收起侧栏",
     "nav.tools": "工具",
     "nav.help": "帮助",
+    "nav.about": "关于",
     "project.notFound": "项目未找到",
     "project.notFoundDesc": "该学习项目不存在或已被删除",
     "project.backToList": "返回项目列表",
@@ -282,6 +283,14 @@ const dictionaries: Record<Locale, TranslationDict> = {
     "about.feature4.desc": "随时提问即时解答",
     "about.links": "项目链接",
     "about.opensource": "使用的开源项目",
+    "about.tagline": "智能学习助手，让教材学习更高效",
+    "about.coreFeatures": "核心功能",
+    "about.coreFeaturesDesc": "体验 AI 赋能的全新学习流程",
+    "about.builtWith": "基于以下优秀开源项目构建",
+    "about.cta":
+      "NextBook 是开源项目，欢迎贡献代码、提出建议或在 GitHub 上为我们点亮 Star！",
+    "about.githubRepo": "GitHub 仓库",
+    "about.getStarted": "立即开始",
   },
 
   "en-US": {
@@ -424,6 +433,7 @@ const dictionaries: Record<Locale, TranslationDict> = {
     "nav.collapse": "Collapse sidebar",
     "nav.tools": "Tools",
     "nav.help": "Help",
+    "nav.about": "About",
     "project.notFound": "Project not found",
     "project.notFoundDesc": "This project does not exist or has been deleted",
     "project.backToList": "Back to projects",
@@ -565,6 +575,14 @@ const dictionaries: Record<Locale, TranslationDict> = {
     "about.feature4.desc": "Ask questions anytime",
     "about.links": "Project Links",
     "about.opensource": "Open Source Projects Used",
+    "about.tagline": "Study smarter with AI-powered learning",
+    "about.coreFeatures": "Core Features",
+    "about.coreFeaturesDesc": "Experience a new AI-powered learning workflow",
+    "about.builtWith": "Built with these amazing open source projects",
+    "about.cta":
+      "NextBook is open source. Contributions, suggestions, and GitHub stars are welcome!",
+    "about.githubRepo": "GitHub Repository",
+    "about.getStarted": "Get Started",
   },
 
   "ja-JP": {
@@ -703,6 +721,7 @@ const dictionaries: Record<Locale, TranslationDict> = {
     "nav.collapse": "サイドバーを閉じる",
     "nav.tools": "ツール",
     "nav.help": "ヘルプ",
+    "nav.about": "について",
     "project.notFound": "プロジェクトが見つかりません",
     "project.notFoundDesc": "このプロジェクトは存在しないか削除されました",
     "project.backToList": "プロジェクト一覧に戻る",
@@ -827,6 +846,14 @@ const dictionaries: Record<Locale, TranslationDict> = {
     "about.feature4.desc": "いつでも質問可能",
     "about.links": "プロジェクトリンク",
     "about.opensource": "使用しているオープンソース",
+    "about.tagline": "AI搭載の学習をよりスマートに",
+    "about.coreFeatures": "主要機能",
+    "about.coreFeaturesDesc": "AIが変える新しい学習体験",
+    "about.builtWith": "これらの素晴らしいオープンソースプロジェクトで構築",
+    "about.cta":
+      "NextBookはオープンソースです。貢献、提案、GitHubスターをお待ちしています！",
+    "about.githubRepo": "GitHubリポジトリ",
+    "about.getStarted": "はじめる",
   },
 };
 
