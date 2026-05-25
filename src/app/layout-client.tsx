@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, type ReactNode } from "react";
+import { usePathname } from "next/navigation";
 import { AppSidebar } from "@/components/app-sidebar";
 import { AIChatPanel } from "@/components/ai-chat-panel";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,9 @@ export function useLayout(): LayoutContextType {
 // ── Client Wrapper ─────────────────────────────────────────────────────
 
 export function AppLayout({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  const isProjectPage =
+    pathname.startsWith("/projects/") && pathname !== "/projects";
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [aiPanelChapter, setAiPanelChapter] = useState<string | undefined>(
@@ -52,7 +56,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         onToggle={() => setSidebarCollapsed((prev) => !prev)}
       />
       <main className="flex-1 overflow-auto pb-16 md:pb-0 relative">
-        {sidebarCollapsed && (
+        {sidebarCollapsed && !isProjectPage && (
           <Button
             variant="ghost"
             size="icon"
