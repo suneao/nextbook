@@ -12,6 +12,8 @@ import {
   Settings,
   HardDrive,
   BookOpen,
+  ChevronLeft,
+  ChevronRight,
   Plus,
   Wrench,
   HelpCircle,
@@ -20,10 +22,16 @@ import {
 import Link from "next/link";
 
 type AppSidebarProps = {
+  collapsed: boolean;
+  onToggle: () => void;
   onCreateProject?: () => void;
 };
 
-export function AppSidebar({ onCreateProject }: AppSidebarProps) {
+export function AppSidebar({
+  collapsed,
+  onToggle,
+  onCreateProject,
+}: AppSidebarProps) {
   const { t } = useLocale();
   const pathname = usePathname();
 
@@ -38,7 +46,36 @@ export function AppSidebar({ onCreateProject }: AppSidebarProps) {
   ];
 
   return (
-    <aside className="hidden md:flex sticky top-14 h-[calc(100vh-3.5rem)] flex-col border-r bg-card/40 backdrop-blur-md shrink-0 w-60">
+    <aside
+      className={cn(
+        "hidden md:flex flex-col border-r bg-card/40 backdrop-blur-md shrink-0",
+        collapsed ? "w-[56px]" : "w-[240px]",
+      )}
+    >
+      {/* Toggle */}
+      <div
+        className={cn(
+          "flex items-center p-2",
+          collapsed ? "justify-center" : "justify-end",
+        )}
+      >
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-8"
+          onClick={onToggle}
+          title={collapsed ? "展开侧栏" : "收起侧栏"}
+        >
+          {collapsed ? (
+            <ChevronRight className="size-5" />
+          ) : (
+            <ChevronLeft className="size-5" />
+          )}
+        </Button>
+      </div>
+
+      <Separator />
+
       {/* Nav Items */}
       <ScrollArea className="flex-1 px-2 py-3 sidebar-scroll">
         <nav className="flex flex-col gap-1">
@@ -48,16 +85,21 @@ export function AppSidebar({ onCreateProject }: AppSidebarProps) {
               (item.href !== "/" && pathname.startsWith(item.href));
             const Icon = item.icon;
             return (
-              <Link key={item.href} href={item.href}>
+              <Link
+                key={item.href}
+                href={item.href}
+                title={collapsed ? item.label : undefined}
+              >
                 <Button
                   variant={active ? "secondary" : "ghost"}
                   className={cn(
-                    "w-full justify-start gap-3",
+                    "w-full transition-all",
+                    collapsed ? "justify-center px-0" : "justify-start gap-3",
                     active && "font-semibold",
                   )}
                 >
                   <Icon className="size-5 shrink-0" />
-                  <span className="truncate">{item.label}</span>
+                  {!collapsed && <span className="truncate">{item.label}</span>}
                 </Button>
               </Link>
             );
@@ -70,22 +112,30 @@ export function AppSidebar({ onCreateProject }: AppSidebarProps) {
             <Separator className="mb-3" />
             <Button
               variant="outline"
-              className="w-full border-dashed justify-start gap-3"
+              className={cn(
+                "w-full border-dashed transition-all",
+                collapsed ? "justify-center px-0" : "justify-start gap-3",
+              )}
               onClick={onCreateProject}
+              title={collapsed ? "新建项目" : undefined}
             >
               <Plus className="size-5 shrink-0" />
-              <span>{t("projects.new")}</span>
+              {!collapsed && <span>{t("projects.new")}</span>}
             </Button>
           </div>
         )}
       </ScrollArea>
 
       {/* Footer branding */}
-      <div className="p-3 border-t">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <BookOpen className="size-5" />
-          <span>NextBook Study</span>
-        </div>
+      <div className={cn("p-3 border-t", collapsed && "flex justify-center")}>
+        {collapsed ? (
+          <BookOpen className="size-5 text-muted-foreground" />
+        ) : (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <BookOpen className="size-5" />
+            <span>NextBook Study</span>
+          </div>
+        )}
       </div>
     </aside>
   );

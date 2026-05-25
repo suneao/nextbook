@@ -160,6 +160,9 @@ export default function ProjectDetailClient() {
   const [dragging, setDragging] = useState(false);
   const [generatingToast, setGeneratingToast] = useState(false);
   const dragStart = useRef({ mx: 0, w: 280 });
+  const [materialsHeight, setMaterialsHeight] = useState(200);
+  const [draggingMaterials, setDraggingMaterials] = useState(false);
+  const materialsDragStart = useRef({ my: 0, h: 200 });
   const [loaded, setLoaded] = useState(false);
   // Sidebar resize via drag
   useEffect(() => {
@@ -177,6 +180,26 @@ export default function ProjectDetailClient() {
       window.removeEventListener("mouseup", handleMouseUp);
     };
   }, [dragging]);
+
+  // Materials divider resize via drag
+  useEffect(() => {
+    if (!draggingMaterials) return;
+    const handleMouseMove = (e: MouseEvent) => {
+      const delta = materialsDragStart.current.my - e.clientY;
+      const h = Math.max(
+        80,
+        Math.min(600, materialsDragStart.current.h + delta),
+      );
+      setMaterialsHeight(h);
+    };
+    const handleMouseUp = () => setDraggingMaterials(false);
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [draggingMaterials]);
 
   const toggleSidebar = () => {
     setSidebarWidth((w) => (w === 0 ? 280 : 0));
@@ -201,6 +224,9 @@ export default function ProjectDetailClient() {
   const examInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    // 只重置目录宽度，保留旧内容避免骨架屏闪屏
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSidebarWidth(280);
     loadProjects().then((projects) => {
       const found = projects.find((p) => p.id === projectId) ?? null;
       const firstScId =
@@ -962,13 +988,18 @@ export default function ProjectDetailClient() {
 
   if (!loaded)
     return (
-      <div className="flex items-center justify-center h-[calc(100vh-3.5rem)]">
-        <div className="space-y-4 w-full max-w-2xl px-6">
-          <div className="h-8 w-64 bg-muted rounded-lg animate-pulse" />
-          <div className="flex gap-4">
-            <div className="h-[60vh] w-[280px] bg-muted rounded-xl animate-pulse shrink-0" />
-            <div className="flex-1 h-[60vh] bg-muted rounded-xl animate-pulse" />
+      <div className="flex h-[calc(100vh-3.5rem)] min-h-0 overflow-hidden">
+        <div className="w-[280px] shrink-0 border-r bg-card/40 p-4 space-y-4">
+          <div className="h-5 w-32 bg-muted rounded animate-pulse" />
+          <div className="space-y-3">
+            <div className="h-4 w-full bg-muted rounded animate-pulse" />
+            <div className="h-4 w-3/4 bg-muted rounded animate-pulse" />
+            <div className="h-4 w-1/2 bg-muted rounded animate-pulse" />
           </div>
+        </div>
+        <div className="flex-1 flex flex-col">
+          <div className="shrink-0 h-[41px] border-b bg-card/40" />
+          <div className="flex-1" />
         </div>
       </div>
     );
@@ -990,7 +1021,7 @@ export default function ProjectDetailClient() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] overflow-hidden">
+    <div className="flex h-[calc(100vh-3.5rem)] min-h-0 overflow-hidden">
       {/* Hidden file inputs */}
       <input
         ref={textbookInputRef}
@@ -1043,7 +1074,6 @@ export default function ProjectDetailClient() {
           "max-md:rounded-r-2xl",
           sidebarWidth === 0 && "overflow-hidden border-r-0",
           "fixed top-14 left-0 bottom-0 z-50 md:static",
-          "transition-transform duration-300 ease-in-out md:transition-[width] md:duration-200",
           "w-[85vw] md:w-auto",
           sidebarWidth > 0
             ? "translate-x-0"
@@ -1053,7 +1083,6 @@ export default function ProjectDetailClient() {
           width: sidebarWidth,
           minWidth: 0,
           maxWidth: "85vw",
-          transition: dragging ? "none" : "width 0.2s",
         }}
       >
         {/* Resize handle */}
@@ -1199,10 +1228,23 @@ export default function ProjectDetailClient() {
           </div>
         </div>
 
-        <Separator />
+        {/* Draggable divider between chapters and materials */}
+        <div
+          className="relative shrink-0 h-2 cursor-row-resize group hover:bg-primary/20 active:bg-primary/30 transition-colors"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            materialsDragStart.current = { my: e.clientY, h: materialsHeight };
+            setDraggingMaterials(true);
+          }}
+        >
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-0.5 rounded-full bg-border group-hover:bg-primary/50 transition-colors" />
+        </div>
 
         {/* Materials Section with own scroll */}
-        <div className="shrink-0 overflow-y-auto max-h-[45%]">
+        <div
+          className="shrink-0 overflow-y-auto"
+          style={{ height: materialsHeight }}
+        >
           <div className="p-2 space-y-3">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2">
               {t("project.materials")}
