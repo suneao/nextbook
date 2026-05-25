@@ -49,7 +49,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         collapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed((prev) => !prev)}
       />
-      <main className="flex-1 overflow-auto relative">{children}</main>
+      <main className="flex-1 overflow-auto">{children}</main>
       <AIChatPanel
         open={aiPanelOpen}
         onClose={() => setAiPanelOpen(false)}

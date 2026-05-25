@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  useState,
-  useEffect,
-  useCallback,
-  useRef,
-  startTransition,
-} from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useLocale } from "@/lib/i18n";
 import {
@@ -235,11 +229,9 @@ export default function ProjectDetailClient() {
         found.chapters[0].subChapters.length > 0
           ? found.chapters[0].subChapters[0].id
           : null;
-      startTransition(() => {
-        setProject(found);
-        setLoaded(true);
-        if (firstScId) setSelectedSubChapterId(firstScId);
-      });
+      setProject(found);
+      setLoaded(true);
+      if (firstScId) setSelectedSubChapterId(firstScId);
     });
   }, [projectId]);
 
@@ -988,7 +980,7 @@ export default function ProjectDetailClient() {
 
   if (!loaded)
     return (
-      <div className="flex absolute inset-0 overflow-hidden">
+      <div className="flex h-[calc(100vh-3.5rem)] min-h-0 overflow-hidden">
         <div className="w-[280px] shrink-0 border-r bg-card/40 p-4 space-y-4">
           <div className="h-5 w-32 bg-muted rounded animate-pulse" />
           <div className="space-y-3">
@@ -1021,7 +1013,7 @@ export default function ProjectDetailClient() {
   }
 
   return (
-    <div className="flex absolute inset-0 overflow-hidden">
+    <div className="flex h-[calc(100vh-3.5rem)] min-h-0 overflow-hidden">
       {/* Hidden file inputs */}
       <input
         ref={textbookInputRef}
