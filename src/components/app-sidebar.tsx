@@ -23,7 +23,7 @@ import Link from "next/link";
 
 type AppSidebarProps = {
   collapsed: boolean;
-  onToggle: () => void;
+  onToggle?: () => void;
   onCreateProject?: () => void;
 };
 
@@ -53,28 +53,31 @@ export function AppSidebar({
       )}
     >
       {/* Toggle */}
-      <div
-        className={cn(
-          "flex items-center p-2",
-          collapsed ? "justify-center" : "justify-end",
-        )}
-      >
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-8"
-          onClick={onToggle}
-          title={collapsed ? "展开侧栏" : "收起侧栏"}
-        >
-          {collapsed ? (
-            <ChevronRight className="size-5" />
-          ) : (
-            <ChevronLeft className="size-5" />
-          )}
-        </Button>
-      </div>
-
-      <Separator />
+      {onToggle && (
+        <>
+          <div
+            className={cn(
+              "flex items-center p-2",
+              collapsed ? "justify-center" : "justify-end",
+            )}
+          >
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8"
+              onClick={onToggle}
+              title={collapsed ? "展开侧栏" : "收起侧栏"}
+            >
+              {collapsed ? (
+                <ChevronRight className="size-5" />
+              ) : (
+                <ChevronLeft className="size-5" />
+              )}
+            </Button>
+          </div>
+          <Separator />
+        </>
+      )}
 
       {/* Nav Items */}
       <ScrollArea className="flex-1 px-2 py-3 sidebar-scroll">

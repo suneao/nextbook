@@ -52,8 +52,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
       }}
     >
       <AppSidebar
-        collapsed={sidebarCollapsed}
-        onToggle={() => setSidebarCollapsed((prev) => !prev)}
+        collapsed={isProjectPage ? false : sidebarCollapsed}
+        onToggle={
+          isProjectPage ? undefined : () => setSidebarCollapsed((prev) => !prev)
+        }
       />
       <main className="flex-1 overflow-auto pb-16 md:pb-0 relative">
         {sidebarCollapsed && !isProjectPage && (
