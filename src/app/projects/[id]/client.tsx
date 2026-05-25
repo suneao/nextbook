@@ -1377,7 +1377,7 @@ export default function ProjectDetailClient() {
             </div>
           </div>
         ) : (
-          <ScrollArea className="flex-1 h-full">
+          <ScrollArea className="flex-1 h-full [&_[data-slot=scroll-area-viewport]]:ring-0 [&_[data-slot=scroll-area-viewport]]:outline-none">
             {selectedSubChapter ? (
               <>
                 <StudyUnitViewer
@@ -1557,12 +1557,18 @@ function ChapterTreeNode({
 
   const isNative = chapter.type === "native";
   const { t: ct } = useLocale();
+  const [open, setOpen] = useState(true);
 
   return (
-    <Collapsible defaultOpen className="group">
+    <Collapsible open={open} onOpenChange={setOpen}>
       <div className="flex items-center gap-0.5 rounded-lg px-2 py-1.5 hover:bg-muted/30 hover:backdrop-blur-md transition-all">
         <CollapsibleTrigger className="flex flex-1 items-center gap-1.5 text-sm font-semibold min-w-0">
-          <ChevronDown className="size-4 text-muted-foreground shrink-0 transition-transform group-data-[state=open]:rotate-180" />
+          <ChevronRight
+            className={cn(
+              "size-4 text-muted-foreground shrink-0 transition-transform duration-200",
+              open && "rotate-90",
+            )}
+          />
           <span className="flex-1 text-left truncate">{chapter.title}</span>
         </CollapsibleTrigger>
         {/* Right-side area: badge+count ↔ action buttons swap on hover */}
@@ -2091,11 +2097,11 @@ function StudyUnitViewer({
                 ) : (
                   <>
                     {/* Question row */}
-                    <div className="flex items-start gap-0 border-b border-border/50 group/trigger">
+                    <div className="flex items-start gap-0 border-b border-border/50">
                       <span className="shrink-0 w-9 pt-4 text-center text-sm font-bold text-amber-500/80">
                         Q{exIdx + 1}
                       </span>
-                      <CollapsibleTrigger className="flex flex-1 items-start gap-2 px-3 py-3.5 text-left">
+                      <CollapsibleTrigger className="group/trigger flex flex-1 items-start gap-2 px-3 py-3.5 text-left">
                         <span className="flex-1 text-base leading-relaxed">
                           <Markdown content={ex.question} />
                         </span>
@@ -2271,11 +2277,11 @@ function StudyUnitViewer({
                 ) : (
                   <>
                     {/* Question row */}
-                    <div className="flex items-start gap-0 border-b border-border/50 group/trigger">
+                    <div className="flex items-start gap-0 border-b border-border/50">
                       <span className="shrink-0 w-9 pt-4 text-center text-sm font-bold text-emerald-600/80">
                         {idx + 1}
                       </span>
-                      <CollapsibleTrigger className="flex flex-1 items-start gap-2 px-3 py-3.5 text-left">
+                      <CollapsibleTrigger className="group/trigger flex flex-1 items-start gap-2 px-3 py-3.5 text-left">
                         <span className="flex-1 text-base leading-relaxed">
                           <Markdown content={ex.question} />
                         </span>
