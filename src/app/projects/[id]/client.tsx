@@ -988,7 +988,7 @@ export default function ProjectDetailClient() {
 
   if (!loaded)
     return (
-      <div className="flex h-[calc(100vh-3.5rem)] min-h-0 overflow-hidden">
+      <div className="flex absolute inset-0 overflow-hidden">
         <div className="w-[280px] shrink-0 border-r bg-card/40 p-4 space-y-4">
           <div className="h-5 w-32 bg-muted rounded animate-pulse" />
           <div className="space-y-3">
@@ -1021,7 +1021,7 @@ export default function ProjectDetailClient() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] min-h-0 overflow-hidden">
+    <div className="flex absolute inset-0 overflow-hidden">
       {/* Hidden file inputs */}
       <input
         ref={textbookInputRef}
