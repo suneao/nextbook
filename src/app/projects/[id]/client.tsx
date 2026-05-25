@@ -980,7 +980,7 @@ export default function ProjectDetailClient() {
 
   if (!loaded)
     return (
-      <div className="flex h-[calc(100vh-3.5rem)] min-h-0 overflow-hidden">
+      <div className="flex h-[calc(100vh-3.5rem)] overflow-hidden">
         <div className="w-[280px] shrink-0 border-r bg-card/40 p-4 space-y-4">
           <div className="h-5 w-32 bg-muted rounded animate-pulse" />
           <div className="space-y-3">
@@ -1013,7 +1013,7 @@ export default function ProjectDetailClient() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] min-h-0 overflow-hidden">
+    <div className="flex h-[calc(100vh-3.5rem)] overflow-hidden">
       {/* Hidden file inputs */}
       <input
         ref={textbookInputRef}
@@ -1088,7 +1088,13 @@ export default function ProjectDetailClient() {
             }}
           />
         )}
-        <div className="shrink-0 px-4 py-3 border-b">
+        <div
+          className="shrink-0 px-4 py-3 border-b bg-card/80"
+          style={{
+            backdropFilter: "blur(12px)",
+            WebkitBackdropFilter: "blur(12px)",
+          }}
+        >
           <div className="flex items-center gap-2">
             <span className="text-2xl">{project.icon}</span>
             <div className="flex-1 min-w-0">
@@ -1125,7 +1131,7 @@ export default function ProjectDetailClient() {
             </Button>
           </div>
         </div>
-        <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
           <div className="p-2">
             {/* Chapter Tree */}
             <div>
@@ -1193,7 +1199,7 @@ export default function ProjectDetailClient() {
                 </div>
               )}
               <div className="space-y-1">
-                {project.chapters.map((chapter) => (
+                {project.chapters?.map((chapter) => (
                   <ChapterTreeNode
                     key={chapter.id}
                     chapter={chapter}
@@ -1234,7 +1240,7 @@ export default function ProjectDetailClient() {
 
         {/* Materials Section with own scroll */}
         <div
-          className="shrink-0 overflow-y-auto"
+          className="shrink-0 overflow-y-auto overscroll-contain"
           style={{ height: materialsHeight }}
         >
           <div className="p-2 space-y-3">
@@ -1316,7 +1322,13 @@ export default function ProjectDetailClient() {
 
       {/* Center: Study Viewer */}
       <div className="flex-1 flex flex-col min-w-0">
-        <div className="shrink-0 flex items-center gap-2 px-4 py-2 border-b bg-card/40 backdrop-blur-md min-h-[41px]">
+        <div
+          className="shrink-0 flex items-center gap-2 px-4 py-2 border-b bg-card/80 min-h-[41px]"
+          style={{
+            backdropFilter: "blur(12px)",
+            WebkitBackdropFilter: "blur(12px)",
+          }}
+        >
           {sidebarWidth === 0 && (
             <Button
               variant="ghost"
@@ -1377,7 +1389,7 @@ export default function ProjectDetailClient() {
             </div>
           </div>
         ) : (
-          <ScrollArea className="flex-1 h-full [&_[data-slot=scroll-area-viewport]]:ring-0 [&_[data-slot=scroll-area-viewport]]:outline-none">
+          <ScrollArea className="flex-1 h-full overscroll-contain [&_[data-slot=scroll-area-viewport]]:ring-0 [&_[data-slot=scroll-area-viewport]]:outline-none">
             {selectedSubChapter ? (
               <>
                 <StudyUnitViewer
@@ -1560,7 +1572,7 @@ function ChapterTreeNode({
   const [open, setOpen] = useState(true);
 
   return (
-    <Collapsible open={open} onOpenChange={setOpen}>
+    <Collapsible defaultOpen onOpenChange={setOpen}>
       <div className="flex items-center gap-0.5 rounded-lg px-2 py-1.5 hover:bg-muted/30 hover:backdrop-blur-md transition-all">
         <CollapsibleTrigger className="flex flex-1 items-center gap-1.5 text-sm font-semibold min-w-0">
           <ChevronRight
