@@ -1070,7 +1070,7 @@ export default function ProjectDetailClient() {
       )}
       <div
         className={cn(
-          "border-r bg-card/40 md:bg-transparent backdrop-blur-md md:backdrop-blur-none flex flex-col shrink-0 overflow-hidden",
+          "border-r bg-card/40 md:bg-transparent backdrop-blur-md md:backdrop-blur-none flex flex-col shrink-0 overflow-hidden h-full",
           "max-md:rounded-r-2xl",
           sidebarWidth === 0 && "border-r-0",
           "fixed top-14 left-0 bottom-0 z-50 md:static",
