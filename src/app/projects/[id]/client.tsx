@@ -1070,9 +1070,9 @@ export default function ProjectDetailClient() {
       )}
       <div
         className={cn(
-          "border-r bg-card/40 md:bg-transparent backdrop-blur-md md:backdrop-blur-none flex flex-col shrink-0",
+          "border-r bg-card/40 md:bg-transparent backdrop-blur-md md:backdrop-blur-none flex flex-col shrink-0 overflow-hidden",
           "max-md:rounded-r-2xl",
-          sidebarWidth === 0 && "overflow-hidden border-r-0",
+          sidebarWidth === 0 && "border-r-0",
           "fixed top-14 left-0 bottom-0 z-50 md:static",
           "w-[85vw] md:w-auto",
           sidebarWidth > 0
@@ -1567,10 +1567,10 @@ function ChapterTreeNode({
   const { t: ct } = useLocale();
 
   return (
-    <Collapsible defaultOpen>
-      <div className="flex items-center gap-0.5 rounded-lg px-2 py-1.5 group hover:bg-muted/30 hover:backdrop-blur-md transition-all">
+    <Collapsible defaultOpen className="group">
+      <div className="flex items-center gap-0.5 rounded-lg px-2 py-1.5 hover:bg-muted/30 hover:backdrop-blur-md transition-all">
         <CollapsibleTrigger className="flex flex-1 items-center gap-1.5 text-sm font-semibold min-w-0">
-          <ChevronDown className="size-4 text-muted-foreground shrink-0 transition-transform group-aria-expanded:rotate-180" />
+          <ChevronDown className="size-4 text-muted-foreground shrink-0 transition-transform group-data-[state=open]:rotate-180" />
           <span className="flex-1 text-left truncate">{chapter.title}</span>
         </CollapsibleTrigger>
         {/* Right-side area: badge+count ↔ action buttons swap on hover */}
