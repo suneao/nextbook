@@ -1,11 +1,8 @@
 "use client";
 
 import { createContext, useContext, useState, type ReactNode } from "react";
-import { usePathname } from "next/navigation";
 import { AppSidebar } from "@/components/app-sidebar";
 import { AIChatPanel } from "@/components/ai-chat-panel";
-import { Button } from "@/components/ui/button";
-import { PanelLeft } from "lucide-react";
 
 // ── Context ────────────────────────────────────────────────────────────
 
@@ -31,9 +28,6 @@ export function useLayout(): LayoutContextType {
 // ── Client Wrapper ─────────────────────────────────────────────────────
 
 export function AppLayout({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
-  const isProjectPage =
-    pathname.startsWith("/projects/") && pathname !== "/projects";
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [aiPanelChapter, setAiPanelChapter] = useState<string | undefined>(
@@ -52,25 +46,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
       }}
     >
       <AppSidebar
-        collapsed={isProjectPage ? false : sidebarCollapsed}
-        onToggle={
-          isProjectPage ? undefined : () => setSidebarCollapsed((prev) => !prev)
-        }
+        collapsed={sidebarCollapsed}
+        onToggle={() => setSidebarCollapsed((prev) => !prev)}
       />
-      <main className="flex-1 overflow-auto pb-16 md:pb-0 relative">
-        {sidebarCollapsed && !isProjectPage && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute top-2 left-2 z-30 size-8 bg-background/80 backdrop-blur border shadow-sm hidden md:inline-flex"
-            onClick={() => setSidebarCollapsed(false)}
-            title="展开侧栏"
-          >
-            <PanelLeft className="size-4" />
-          </Button>
-        )}
-        {children}
-      </main>
+      <main className="flex-1 overflow-auto pb-16 md:pb-0">{children}</main>
       <AIChatPanel
         open={aiPanelOpen}
         onClose={() => setAiPanelOpen(false)}
