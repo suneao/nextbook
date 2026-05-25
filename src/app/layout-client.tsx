@@ -7,8 +7,6 @@ import { AIChatPanel } from "@/components/ai-chat-panel";
 // ── Context ────────────────────────────────────────────────────────────
 
 export type LayoutContextType = {
-  sidebarCollapsed: boolean;
-  setSidebarCollapsed: (value: boolean) => void;
   aiPanelOpen: boolean;
   setAiPanelOpen: (value: boolean) => void;
   aiPanelChapter: string | undefined;
@@ -28,7 +26,6 @@ export function useLayout(): LayoutContextType {
 // ── Client Wrapper ─────────────────────────────────────────────────────
 
 export function AppLayout({ children }: { children: ReactNode }) {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [aiPanelChapter, setAiPanelChapter] = useState<string | undefined>(
     undefined,
@@ -37,18 +34,13 @@ export function AppLayout({ children }: { children: ReactNode }) {
   return (
     <LayoutContext.Provider
       value={{
-        sidebarCollapsed,
-        setSidebarCollapsed,
         aiPanelOpen,
         setAiPanelOpen,
         aiPanelChapter,
         setAiPanelChapter,
       }}
     >
-      <AppSidebar
-        collapsed={sidebarCollapsed}
-        onToggle={() => setSidebarCollapsed((prev) => !prev)}
-      />
+      <AppSidebar />
       <main className="flex-1 overflow-auto pb-16 md:pb-0">{children}</main>
       <AIChatPanel
         open={aiPanelOpen}
