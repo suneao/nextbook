@@ -36,9 +36,13 @@ export async function analyzeChapters(
   const prompts: Record<Locale, { system: string; user: string }> = {
     "zh-CN": {
       system:
-        "你是一个教材分析专家。请根据提供的教材文本，识别并划分章节结构。请始终使用简体中文输出所有章节标题。",
+        "你是一个教材分析专家。请根据提供的教材文本，识别并划分章节结构。\n\n【语言强制要求】你必须100%使用简体中文输出所有章节标题和子节标题。严禁输出任何英文、日文或其他语言的标题。即使原文标题是其他语言，也必须翻译为简体中文后输出。",
       user:
         "请分析以下教材文本，识别出所有章节（大章）和小节（小章），返回JSON格式。\n\n" +
+        "【语言强制要求 - 最重要】\n" +
+        "- 所有title字段必须使用简体中文，严禁输出英文、日文或其他语言\n" +
+        "- 如果原文标题是英文、日文或其他语言，你必须将它们翻译为简体中文\n" +
+        "- 翻译时要准确、专业，符合中文学术教材的表达习惯\n\n" +
         "要求：\n" +
         '1. 识别所有大章标题（如"第一章 xxx"、"Chapter 1 xxx"等）\n' +
         "2. 【关键】文本开头可能有目录，目录中会列出各章节标题。你必须忽略目录，只从正文中识别章节。\n" +
@@ -48,7 +52,7 @@ export async function analyzeChapters(
         '4. 每个大章下识别所有小节（如"1.1 xxx"、"§1.2 xxx"等）\n' +
         "5. 如果正文中没有明确的章节标识，请根据内容主题自行划分\n" +
         "6. 每大章的小节数量不固定，根据实际内容确定\n" +
-        "7. 所有标题必须使用简体中文输出\n" +
+        "7. 【重申语言要求】所有标题必须使用简体中文，禁止使用其他语言\n" +
         "8. 【重要】每个小节都必须包含posMarker和endPosMarker字段：\n" +
         '   - posMarker: 正文中该小节标题之前最近的位置标记编号（如"POS_010000"）\n' +
         '   - endPosMarker: 正文中该小节内容结束之后最近的位置标记编号（如"POS_020000"）\n' +
@@ -72,9 +76,13 @@ export async function analyzeChapters(
     },
     "en-US": {
       system:
-        "You are a textbook analysis expert. Identify and divide the chapter structure from the provided text. Always output all chapter titles in English.",
+        "You are a textbook analysis expert. Identify and divide the chapter structure from the provided text.\n\n[LANGUAGE REQUIREMENT] You MUST output ALL chapter and sub-section titles in English. Absolutely no Chinese, Japanese, or any other language. If the original titles are in another language, you MUST translate them to English.",
       user:
         "Analyze the following textbook text, identify all chapters and sub-sections, and return JSON.\n\n" +
+        "[LANGUAGE REQUIREMENT - MOST IMPORTANT]\n" +
+        "- ALL title fields MUST be in English. Do NOT output Chinese, Japanese, or any other language.\n" +
+        "- If the original titles are in Chinese, Japanese, or another language, you MUST translate them to English.\n" +
+        "- Translations must be accurate, professional, and consistent with academic English textbook conventions.\n\n" +
         "Requirements:\n" +
         '1. Identify all chapter titles (e.g. "Chapter 1: Functions", "1. Introduction")\n' +
         "2. [CRITICAL] The text may contain a Table of Contents at the beginning listing chapter titles. IGNORE the TOC entirely — only identify chapters from the body text.\n" +
@@ -84,7 +92,7 @@ export async function analyzeChapters(
         '4. Under each chapter, identify all sub-sections (e.g. "1.1 Definition", "§2.1 Overview")\n' +
         "5. If there are no explicit chapter markers in the body text, divide by content topics\n" +
         "6. The number of sub-sections per chapter is not fixed; determine based on actual content\n" +
-        "7. ALL titles MUST be in English\n" +
+        "7. [REPEAT LANGUAGE RULE] ALL titles MUST be in English — no exceptions!\n" +
         "8. [REQUIRED] Every subchapter MUST include both posMarker and endPosMarker fields:\n" +
         '   - posMarker: the nearest 【POS_XXXXX】 marker BEFORE this subchapter heading in the BODY TEXT (e.g. "POS_010000")\n' +
         '   - endPosMarker: the nearest 【POS_XXXXX】 marker AFTER this subchapter content ends in the BODY TEXT (e.g. "POS_020000")\n' +
@@ -110,9 +118,13 @@ export async function analyzeChapters(
     },
     "ja-JP": {
       system:
-        "あなたは教材分析の専門家です。提供されたテキストから章構成を識別・分割してください。すべての章タイトルを日本語で出力してください。",
+        "あなたは教材分析の専門家です。提供されたテキストから章構成を識別・分割してください。\n\n【言語強制要件】すべての章タイトルと節タイトルを必ず日本語で出力してください。英語、中国語、その他の言語は一切使用禁止です。原文が他の言語であっても、必ず日本語に翻訳して出力すること。",
       user:
         "以下の教材テキストを分析し、すべての章（大章）と節（小章）を識別してJSON形式で返してください。\n\n" +
+        "【言語強制要件 - 最重要】\n" +
+        "- すべてのtitleフィールドは必ず日本語で出力すること。英語、中国語など他の言語は絶対に使用しないこと\n" +
+        "- 原文タイトルが中国語・英語・その他の言語であっても、必ず日本語に翻訳すること\n" +
+        "- 翻訳は正確で専門的、日本の学術教科書の表現習慣に合ったものにすること\n\n" +
         "要件：\n" +
         "1. すべての大章タイトルを識別（例：「第一章 xxx」「Chapter 1 xxx」など）\n" +
         "2. 【重要】テキストの冒頭に目次がある場合があります。目次は無視し、本文からのみ章を識別してください。\n" +
@@ -121,7 +133,7 @@ export async function analyzeChapters(
         "3. 各大章の下にすべての節を識別（例：「1.1 xxx」「§1.2 xxx」など）\n" +
         "4. テキストに明確な章の区切りがない場合は、内容のトピックに基づいて分割\n" +
         "5. 各大章の節数は固定せず、実際の内容に基づいて決定\n" +
-        "6. すべてのタイトルを日本語で出力してください\n" +
+        "6. 【言語再確認】すべてのタイトルを日本語で出力してください。他の言語は禁止です\n" +
         "7. 【必須】各節にはposMarkerとendPosMarkerの両方のフィールドを含めてください：\n" +
         '   - posMarker: 本文中の節タイトルの直前にある最も近い【POS_XXXXX】マーカー番号（例："POS_010000"）\n' +
         '   - endPosMarker: 本文中の節内容が終わった直後にある最も近い【POS_XXXXX】マーカー番号（例："POS_020000"）\n' +
@@ -184,19 +196,22 @@ export async function extractKnowledgePoints(
   > = {
     "zh-CN": {
       system:
-        "你是一个教育内容分析专家。请从提供的教材文本中提取知识点、例题和习题。请始终使用简体中文输出所有内容。在JSON中，LaTeX反斜杠命令必须双重转义（如 \\frac 而非 \frac），否则JSON解析会失败。",
+        "你是一个教育内容分析专家。请从提供的教材文本中提取知识点、例题和习题。\n\n【语言强制要求】你必须100%使用简体中文输出所有内容（知识点标题、知识点内容、题目、解答等）。严禁输出任何英文、日文或其他语言的内容。在JSON中，LaTeX反斜杠命令必须双重转义（如 \\frac 而非 \frac），否则JSON解析会失败。",
       userPrefix: '请详细分析以下教材文本中关于"',
       userSuffix:
         '"的内容，提取详细的学习材料。\n\n' +
+        "【语言强制要求 - 最重要】\n" +
+        "- 所有输出内容必须使用简体中文：知识点标题、知识点内容、例题的question和solution、习题的question和solution\n" +
+        "- 严禁在任何字段中输出英文、日文或其他语言\n" +
+        "- 如果原文是其他语言，你必须将它们翻译为专业准确的中文\n\n" +
         "【知识点要求 - 务必详细】\n" +
-        "- 每个知识点必须包含200字以上的详细说明\n" +
+        "- 每个知识点必须包含200字以上的详细中文说明\n" +
         "- 禁止使用Markdown标题格式（# ## ###），内容中使用**加粗**、*斜体*、==荧光高亮==强调重点\n" +
         "- 每个知识点应包含：概念定义、核心性质、推导过程（如有）、典型应用场景、记忆技巧\n" +
         "- 公式必须使用LaTeX：行内 $...$，块级 $$...$$（独占一行）\n" +
         "- 【禁止】公式内部绝对不能换行！所有数学表达式必须写在同一行中，否则渲染会失败\n" +
         "- 分数 \\frac{}{}，根号 \\sqrt{}，积分 \\int，求和 \\sum，极限 \\lim\n" +
-        "- 知识点数量：3-6个，确保覆盖完整\n" +
-        "- 所有内容必须使用简体中文\n\n" +
+        "- 知识点数量：3-6个，确保覆盖完整\n\n" +
         "【例题要求 - 务必完整】\n" +
         "- 每题必须包含完整的解答步骤，使用 **第1步：**、**第2步：** 等格式标注每一步\n" +
         "- 每步都要说明依据的定理或性质，如：**分析思路：**、**证明过程：**、**代入计算：**\n" +
@@ -224,19 +239,22 @@ export async function extractKnowledgePoints(
     },
     "en-US": {
       system:
-        "You are an educational content analysis expert. Extract knowledge points, examples, and exercises from the provided textbook text. Always output ALL content in English. In JSON, LaTeX backslash commands MUST be double-escaped (e.g. \\frac not \frac), otherwise JSON parsing will fail.",
+        "You are an educational content analysis expert. Extract knowledge points, examples, and exercises from the provided textbook text.\n\n[LANGUAGE REQUIREMENT] You MUST output ALL content in English — knowledge point titles, knowledge point content, example questions and solutions, exercise questions and solutions. Absolutely no Chinese, Japanese, or any other language. In JSON, LaTeX backslash commands MUST be double-escaped (e.g. \\frac not \frac), otherwise JSON parsing will fail.",
       userPrefix: 'Please analyze the following textbook text about "',
       userSuffix:
         '" in detail and extract comprehensive learning materials.\n\n' +
+        "[LANGUAGE REQUIREMENT - MOST IMPORTANT]\n" +
+        "- ALL output content MUST be in English: knowledge point titles, knowledge point content, example questions/solutions, exercise questions/solutions\n" +
+        "- Do NOT output Chinese, Japanese, or any other language in ANY field\n" +
+        "- If the source text is in another language, you MUST translate everything to professional, accurate English\n\n" +
         "【Knowledge Points - Must be detailed】\n" +
-        "- Each knowledge point must include 200+ words of detailed explanation\n" +
+        "- Each knowledge point must include 200+ words of detailed explanation in English\n" +
         "- Do NOT use Markdown heading format (# ## ###). Use **bold**, *italic*, ==highlight== for emphasis\n" +
         "- Each knowledge point should include: definition, key properties, derivations (if any), typical applications, memory tips\n" +
         "- Use LaTeX for formulas: inline $...$, block $$...$$\n" +
         "- [FORBIDDEN] Never put line breaks inside math formulas! All math expressions must be on a single line, otherwise rendering will fail\n" +
         "- Fractions \\frac{}{}, roots \\sqrt{}, integrals \\int, sums \\sum, limits \\lim\n" +
-        "- Number of knowledge points: 3-6, ensure complete coverage\n" +
-        "- ALL content MUST be in English\n\n" +
+        "- Number of knowledge points: 3-6, ensure complete coverage\n\n" +
         "【Examples - Must be complete】\n" +
         "- Each example must include complete step-by-step solutions, labeled as **Step 1:**, **Step 2:**, etc.\n" +
         "- Each step must explain the reasoning: **Analysis:**, **Proof:**, **Calculation:**\n" +
@@ -264,19 +282,22 @@ export async function extractKnowledgePoints(
     },
     "ja-JP": {
       system:
-        "あなたは教育コンテンツ分析の専門家です。提供された教材テキストから知識ポイント、例題、練習問題を抽出してください。すべての内容を日本語で出力してください。JSON内ではLaTeXのバックスラッシュコマンドを二重エスケープしてください（例：\\frac のように。\fracではない）。",
+        "あなたは教育コンテンツ分析の専門家です。提供された教材テキストから知識ポイント、例題、練習問題を抽出してください。\n\n【言語強制要件】すべての内容を必ず日本語で出力してください（知識ポイントのタイトルと内容、例題の問題と解答、練習問題の問題と解答）。英語、中国語、その他の言語は一切禁止です。JSON内ではLaTeXのバックスラッシュコマンドを二重エスケープしてください（例：\\frac のように。\fracではない）。",
       userPrefix: "以下の教材テキストの「",
       userSuffix:
         "」について詳細に分析し、包括的な学習教材を抽出してください。\n\n" +
+        "【言語強制要件 - 最重要】\n" +
+        "- すべての出力内容は必ず日本語で出力すること：知識ポイントのタイトル・内容、例題の問題・解答、練習問題の問題・解答\n" +
+        "- どのフィールドでも英語・中国語・その他の言語を絶対に使用しないこと\n" +
+        "- 原文が他の言語の場合は、すべて専門的で正確な日本語に翻訳すること\n\n" +
         "【知識ポイント - 詳細必須】\n" +
-        "- 各知識ポイントは200字以上の詳細な説明を含めること\n" +
+        "- 各知識ポイントは200字以上の詳細な日本語の説明を含めること\n" +
         "- Markdownの見出し形式（# ## ###）は禁止。**太字**、*斜体*、==ハイライト==で強調\n" +
         "- 各知識ポイントに含める：概念の定義、核心的性質、導出過程（あれば）、典型的な応用場面、記憶のコツ\n" +
         "- 数式はLaTeXを使用：インライン $...$、ブロック $$...$$\n" +
         "- 【禁止】数式の内部で絶対に改行しないでください！すべての数式は1行で記述しなければレンダリングが失敗します\n" +
         "- 分数 \\frac{}{}、ルート \\sqrt{}、積分 \\int、和 \\sum、極限 \\lim\n" +
-        "- 知識ポイント数：3〜6個、完全なカバレッジを確保\n" +
-        "- すべての内容を日本語で出力すること\n\n" +
+        "- 知識ポイント数：3〜6個、完全なカバレッジを確保\n\n" +
         "【例題 - 完全必須】\n" +
         "- 各例題は **第1步：**、**第2步：** のようにステップ分けして完全な解答を含めること\n" +
         "- 各ステップで **分析：**、**証明：**、**計算：** のように根拠を説明\n" +
@@ -343,11 +364,13 @@ export async function regenerateSubChapter(
   > = {
     "zh-CN": {
       system:
-        "你是一个教育内容分析专家。请根据用户要求优化知识点、例题和习题。请始终使用简体中文输出所有内容。在JSON中，LaTeX反斜杠命令必须双重转义（如 \\frac 而非 \frac），否则JSON解析会失败。",
+        "你是一个教育内容分析专家。请根据用户要求优化知识点、例题和习题。\n\n【语言强制要求】你必须100%使用简体中文输出所有内容。严禁输出任何英文、日文或其他语言。在JSON中，LaTeX反斜杠命令必须双重转义（如 \\frac 而非 \frac），否则JSON解析会失败。",
       userPrefix: '请分析以下教材文本中关于"',
       userMid: '"的内容。\n\n用户的改进要求：',
       userSuffix:
         "\n\n请根据上述改进要求优化生成的内容。\n\n" +
+        "【语言强制要求 - 最重要】\n" +
+        "- 所有输出内容必须使用简体中文，严禁在任何字段中输出英文、日文或其他语言\n\n" +
         "重要：禁止使用Markdown标题格式（# ## ###），请用**加粗**、*斜体*、==荧光高亮==；" +
         "所有数学公式请使用LaTeX格式：行内公式用 $...$，块级用 $$...$$。公式内部绝对不能换行！\n\n" +
         "返回格式（严格JSON，不要markdown代码块）：\n" +
@@ -360,11 +383,13 @@ export async function regenerateSubChapter(
     },
     "en-US": {
       system:
-        "You are an educational content analysis expert. Optimize knowledge points, examples, and exercises based on user requirements. Always output ALL content in English. In JSON, LaTeX backslash commands MUST be double-escaped (e.g. \\frac not \frac), otherwise JSON parsing will fail.",
+        "You are an educational content analysis expert. Optimize knowledge points, examples, and exercises based on user requirements.\n\n[LANGUAGE REQUIREMENT] You MUST output ALL content in English. Absolutely no Chinese, Japanese, or any other language. In JSON, LaTeX backslash commands MUST be double-escaped (e.g. \\frac not \frac), otherwise JSON parsing will fail.",
       userPrefix: 'Please analyze the following textbook text about "',
       userMid: "\".\n\nUser's improvement requirements: ",
       userSuffix:
         "\n\nPlease optimize the generated content based on the above requirements.\n\n" +
+        "[LANGUAGE REQUIREMENT - MOST IMPORTANT]\n" +
+        "- ALL output content MUST be in English. Do NOT output Chinese, Japanese, or any other language in ANY field.\n\n" +
         "Important: Do NOT use Markdown heading format (# ## ###). Use **bold**, *italic*, ==highlight==. " +
         "Use LaTeX for all math formulas: inline $...$, block $$...$$. Never put line breaks inside formulas!\n\n" +
         "Output format (strict JSON, no markdown code block):\n" +
@@ -377,11 +402,13 @@ export async function regenerateSubChapter(
     },
     "ja-JP": {
       system:
-        "あなたは教育コンテンツ分析の専門家です。ユーザーの要件に基づいて知識ポイント、例題、練習問題を最適化してください。すべての内容を日本語で出力してください。JSON内ではLaTeXのバックスラッシュコマンドを二重エスケープしてください（例：\\frac のように。\fracではない）。",
+        "あなたは教育コンテンツ分析の専門家です。ユーザーの要件に基づいて知識ポイント、例題、練習問題を最適化してください。\n\n【言語強制要件】すべての内容を必ず日本語で出力してください。英語、中国語、その他の言語は一切禁止です。JSON内ではLaTeXのバックスラッシュコマンドを二重エスケープしてください（例：\\frac のように。\fracではない）。",
       userPrefix: "以下の教材テキストの「",
       userMid: "」について分析してください。\n\nユーザーの改善要件：",
       userSuffix:
         "\n\n上記の改善要件に基づいて生成コンテンツを最適化してください。\n\n" +
+        "【言語強制要件 - 最重要】\n" +
+        "- すべての出力内容は必ず日本語で出力すること。英語・中国語・その他の言語は絶対に使用しないこと。\n\n" +
         "重要：Markdownの見出し形式（# ## ###）は禁止。**太字**、*斜体*、==ハイライト==を使用。\n" +
         "すべての数式はLaTeX形式：インライン $...$、ブロック $$...$$。数式内部で絶対に改行しないでください！\n\n" +
         "出力形式（厳密なJSON、マークダウンのコードブロックなし）：\n" +
