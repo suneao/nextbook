@@ -65,7 +65,7 @@ async function openAICompletion(
       model: model.modelId,
       messages,
       temperature: options?.temperature ?? 0.7,
-      max_tokens: options?.maxTokens ?? model.maxOutputTokens ?? 2048,
+      max_tokens: options?.maxTokens ?? model.maxOutputTokens ?? 16384,
     }),
     signal: options?.signal,
   });
@@ -117,7 +117,7 @@ async function anthropicCompletion(
       model: model.modelId,
       system: systemMsg?.content || "",
       messages: chatMessages,
-      max_tokens: options?.maxTokens ?? model.maxOutputTokens ?? 2048,
+      max_tokens: options?.maxTokens ?? model.maxOutputTokens ?? 16384,
       temperature: options?.temperature ?? 0.7,
     }),
     signal: options?.signal,

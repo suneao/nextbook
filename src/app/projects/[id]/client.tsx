@@ -705,9 +705,13 @@ export default function ProjectDetailClient() {
   const handleRegenerateChapter = useCallback(
     async (chapterId: string) => {
       if (!project || project.textbooks.length === 0) return;
-      const settings = JSON.parse(
-        localStorage.getItem("nextbook-settings") || "{}",
-      );
+      const settings = (() => {
+        try {
+          return JSON.parse(localStorage.getItem("nextbook-settings") || "{}");
+        } catch {
+          return {};
+        }
+      })();
       const modelId = settings.chapterModel || "gpt-4o";
       const model = getModelConfig(modelId);
       if (!model?.apiKey) {
@@ -726,9 +730,7 @@ export default function ProjectDetailClient() {
       const initialProject = project;
       const controller = new AbortController();
       abortRef.current = controller;
-      const settings_lang: string =
-        JSON.parse(localStorage.getItem("nextbook-settings") || "{}")
-          .language || "zh-CN";
+      const language = settings.language || "zh-CN";
       setAnalyzing(true);
       try {
         const pdfTexts = await Promise.all(
@@ -737,9 +739,9 @@ export default function ProjectDetailClient() {
         const pdfText = validTextbooks
           .map((tb, i) => {
             const label =
-              settings_lang === "en-US"
+              language === "en-US"
                 ? `Textbook ${i + 1}: ${tb.name}`
-                : settings_lang === "ja-JP"
+                : language === "ja-JP"
                   ? `教科書${i + 1}：${tb.name}`
                   : `教材${i + 1}：${tb.name}`;
             return `\n\n【${label}】\n\n${pdfTexts[i]}`;

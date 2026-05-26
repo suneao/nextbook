@@ -605,20 +605,16 @@ function parseChapterResponse(response: string): Chapter[] {
 }
 
 function sanitizeJsonString(s: string): string {
-  // JSON spec allows only these chars after \: " \ / b f n r t u
+  // JSON spec allows only these chars after \: " \ / n r t
+  // (b and f are excluded because they clash with LaTeX commands like \textbf, \frac;
+  //  u is handled separately to allow \uXXXX but escape \underline etc.)
   // Any other \X (e.g. \{, \}, \[, \(, \^, \_, or any letter) is invalid JSON.
   // We walk character-by-character to double-escape all invalid backslash sequences.
-  const validJsonEscapeChars = new Set([
-    '"',
-    "\\",
-    "/",
-    "b",
-    "f",
-    "n",
-    "r",
-    "t",
-    "u",
-  ]);
+  const HEX_DIGIT = /^[0-9a-fA-F]$/;
+
+  function isHex(ch: string): boolean {
+    return HEX_DIGIT.test(ch);
+  }
 
   let result = "";
   for (let i = 0; i < s.length; i++) {
@@ -629,13 +625,25 @@ function sanitizeJsonString(s: string): string {
         // Already an escaped backslash \\ — keep as-is and skip the second \
         result += "\\\\";
         i++;
-      } else if (validJsonEscapeChars.has(next)) {
-        // Valid JSON escape sequence (\n, \t, \", \/, \b, \f, \r, \uXXXX)
-        // Emit the backslash as-is; the next char will be appended normally
+      } else if (next === '"' || next === "\\" || next === "/") {
+        // Always-valid JSON escapes: \", \\, \/
+        result += ch;
+      } else if (next === "n" || next === "r" || next === "t") {
+        // Newline, carriage return, tab — legitimate in content text
+        result += ch;
+      } else if (
+        next === "u" &&
+        i + 5 < s.length &&
+        isHex(s[i + 2]) &&
+        isHex(s[i + 3]) &&
+        isHex(s[i + 4]) &&
+        isHex(s[i + 5])
+      ) {
+        // Valid JSON Unicode escape \uXXXX
         result += ch;
       } else {
-        // Invalid JSON escape (LaTeX: \{, \}, \[, \], \(, \), \^, \_, letters, etc.)
-        // Double the backslash so \{ becomes \\{ which JSON.parse decodes as \{
+        // Invalid JSON escape (LaTeX: \{, \}, \frac, \textbf, \underline, etc.)
+        // Double the backslash so \frac becomes \\frac which JSON.parse decodes as \frac
         result += "\\\\";
       }
     } else {
@@ -652,10 +660,14 @@ function parseKnowledgeResponse(response: string): {
   examples: Example[];
   exercises: Exercise[];
 } {
-  const clean = response
+  let clean = response
     .replace(/```json\s*/gi, "")
     .replace(/```\s*/g, "")
     .trim();
+
+  // Try to extract JSON object from response if it contains extra text
+  const objectMatch = clean.match(/\{[\s\S]*\}/);
+  if (objectMatch) clean = objectMatch[0];
 
   let raw: RawKnowledge | undefined;
 
@@ -692,23 +704,23 @@ function parseKnowledgeResponse(response: string): {
       for (const n of nested) {
         kps.push({
           id: "kp-ai-" + Date.now() + "-" + kpIdx++,
-          title: String(n.title || ""),
-          content: String(n.content || ""),
+          title: String(n.title ?? ""),
+          content: String(n.content ?? ""),
         });
       }
     } else {
       kps.push({
         id: "kp-ai-" + Date.now() + "-" + kpIdx++,
-        title: String((item as Record<string, unknown>).title || ""),
-        content: String((item as Record<string, unknown>).content || ""),
+        title: String((item as Record<string, unknown>).title ?? ""),
+        content: String((item as Record<string, unknown>).content ?? ""),
       });
     }
   }
 
   const exs: Example[] = (raw.examples || []).map((ex, i) => ({
     id: "ex-ai-" + Date.now() + "-" + i,
-    question: String((ex as Record<string, unknown>).question || ""),
-    solution: String((ex as Record<string, unknown>).solution || ""),
+    question: String((ex as Record<string, unknown>).question ?? ""),
+    solution: String((ex as Record<string, unknown>).solution ?? ""),
     relatedKnowledgePoints: Array.isArray(
       (ex as Record<string, unknown>).relatedKnowledgePoints,
     )
@@ -720,8 +732,8 @@ function parseKnowledgeResponse(response: string): {
 
   const hws: Exercise[] = (raw.exercises || []).map((ex, i) => ({
     id: "hw-ai-" + Date.now() + "-" + i,
-    question: String((ex as Record<string, unknown>).question || ""),
-    solution: String((ex as Record<string, unknown>).solution || ""),
+    question: String((ex as Record<string, unknown>).question ?? ""),
+    solution: String((ex as Record<string, unknown>).solution ?? ""),
     relatedKnowledgePoints: Array.isArray(
       (ex as Record<string, unknown>).relatedKnowledgePoints,
     )
