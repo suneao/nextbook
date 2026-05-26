@@ -1,6 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  startTransition,
+} from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useLocale } from "@/lib/i18n";
 import {
@@ -64,7 +70,7 @@ import {
   deleteProjectStorage,
 } from "@/lib/storage";
 
-const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+const MAX_FILE_SIZE = 50 * 1024 * 1024;
 
 function isTextFile(name: string) {
   return /\.(txt|md|html|htm)$/i.test(name);
@@ -98,7 +104,6 @@ function readFileAsText(file: File): Promise<string> {
 }
 
 function dataUrlToBlobUrl(dataUrl: string, fileName?: string): string {
-  // Handle plain text content (not a data URL)
   if (!dataUrl.startsWith("data:")) {
     const ext = (fileName || "").split(".").pop()?.toLowerCase() || "txt";
     const mimeMap: Record<string, string> = {
@@ -154,11 +159,7 @@ export default function ProjectDetailClient() {
   const [dragging, setDragging] = useState(false);
   const [generatingToast, setGeneratingToast] = useState(false);
   const dragStart = useRef({ mx: 0, w: 280 });
-  const [materialsHeight, setMaterialsHeight] = useState(200);
-  const [draggingMaterials, setDraggingMaterials] = useState(false);
-  const materialsDragStart = useRef({ my: 0, h: 200 });
   const [loaded, setLoaded] = useState(false);
-  // Sidebar resize via drag
   useEffect(() => {
     if (!dragging) return;
     const handleMouseMove = (e: MouseEvent) => {
@@ -174,26 +175,6 @@ export default function ProjectDetailClient() {
       window.removeEventListener("mouseup", handleMouseUp);
     };
   }, [dragging]);
-
-  // Materials divider resize via drag
-  useEffect(() => {
-    if (!draggingMaterials) return;
-    const handleMouseMove = (e: MouseEvent) => {
-      const delta = materialsDragStart.current.my - e.clientY;
-      const h = Math.max(
-        80,
-        Math.min(600, materialsDragStart.current.h + delta),
-      );
-      setMaterialsHeight(h);
-    };
-    const handleMouseUp = () => setDraggingMaterials(false);
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleMouseUp);
-    return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
-    };
-  }, [draggingMaterials]);
 
   const toggleSidebar = () => {
     setSidebarWidth((w) => (w === 0 ? 280 : 0));
@@ -218,9 +199,6 @@ export default function ProjectDetailClient() {
   const examInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // 只重置目录宽度，保留旧内容避免骨架屏闪屏
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSidebarWidth(280);
     loadProjects().then((projects) => {
       const found = projects.find((p) => p.id === projectId) ?? null;
       const firstScId =
@@ -229,9 +207,11 @@ export default function ProjectDetailClient() {
         found.chapters[0].subChapters.length > 0
           ? found.chapters[0].subChapters[0].id
           : null;
-      setProject(found);
-      setLoaded(true);
-      if (firstScId) setSelectedSubChapterId(firstScId);
+      startTransition(() => {
+        setProject(found);
+        setLoaded(true);
+        if (firstScId) setSelectedSubChapterId(firstScId);
+      });
     });
   }, [projectId]);
 
@@ -282,7 +262,6 @@ export default function ProjectDetailClient() {
             return `\n\n【${label}】\n\n${pdfTexts[i]}`;
           })
           .join("");
-        // Slice relevant portion to avoid context overflow across textbooks
         const PAD = 2000;
         let pdfText = fullText;
         if (sc.textStart != null) {
@@ -293,7 +272,6 @@ export default function ProjectDetailClient() {
               : Math.min(fullText.length, sc.textStart + 50000);
           pdfText = fullText.slice(start, end);
         } else {
-          // Fallback: skip first 5% (TOC/preface) then take a window
           const skip = Math.floor(fullText.length * 0.05);
           pdfText = fullText.slice(
             skip,
@@ -437,7 +415,6 @@ export default function ProjectDetailClient() {
     [project, updateProject],
   );
 
-  // Returns the model's max context window in tokens for dynamic segment sizing.
   function getModelContextTokens(modelId: string): number {
     const id = modelId.toLowerCase();
     if (id.includes("deepseek-v4") || id.includes("deepseek-r1"))
@@ -471,7 +448,6 @@ export default function ProjectDetailClient() {
       );
       return;
     }
-    // Snapshot the project once — used for all saves during this run
     const initialProject = project;
     const controller = new AbortController();
     abortRef.current = controller;
@@ -502,7 +478,6 @@ export default function ProjectDetailClient() {
         .join("");
       if (controller.signal.aborted) return;
 
-      // Dynamically compute segment size
       const modelContext = getModelContextTokens(chapterModelId);
       const maxInputTokens = Math.floor(modelContext * 0.5);
       const MARKER_INTERVAL = 10000;
@@ -515,7 +490,6 @@ export default function ProjectDetailClient() {
 
       setAnalysisStatus(t("project.analyzingStructure"));
 
-      // Analyze chapters in segments to stay under token limits
       let chapters: Chapter[] = [];
 
       for (let seg = 0; seg < totalSegments; seg++) {
@@ -552,22 +526,17 @@ export default function ProjectDetailClient() {
           seg > 0 ? chapters.map((c) => c.title) : undefined,
         );
         if (controller.signal.aborted) return;
-        // Merge: check for overlapping chapters between segments.
-        // Only merge if positionally adjacent — avoid conflating same-named
-        // chapters from different textbooks.
         for (const ch of segChapters) {
           const newFirstSC = ch.subChapters[0];
           const dup = chapters.find((existing) => {
             const existingLastSC =
               existing.subChapters[existing.subChapters.length - 1];
-            // Title-based match
             const titleMatch =
               existing.title === ch.title ||
               (existingLastSC &&
                 newFirstSC &&
                 existingLastSC.title === newFirstSC.title);
             if (!titleMatch) return false;
-            // Position-based check: only merge if chapters are physically adjacent
             if (
               existingLastSC?.posMarker != null &&
               newFirstSC?.posMarker != null
@@ -580,13 +549,11 @@ export default function ProjectDetailClient() {
                 newRaw.match(/POS_(\d+)/) || newRaw.match(/(\d+)/);
               const lastPos = parseInt(lastMatch?.[1] ?? "0", 10);
               const newPos = parseInt(newMatch?.[1] ?? "0", 10);
-              // Allow up to 2× SEGMENT_SIZE gap for cross-segment continuity
               if (Math.abs(newPos - lastPos) > SEGMENT_SIZE * 2) return false;
             }
             return true;
           });
           if (dup) {
-            // Merge subchapters, avoiding duplicates at the boundary
             const existingLast = dup.subChapters[dup.subChapters.length - 1];
             const newFirst = ch.subChapters[0];
             if (
@@ -594,7 +561,6 @@ export default function ProjectDetailClient() {
               newFirst &&
               existingLast.title === newFirst.title
             ) {
-              // Overlapping boundary subchapter — skip the duplicate
               ch.subChapters.shift();
             }
             for (const sc of ch.subChapters) {
@@ -609,7 +575,6 @@ export default function ProjectDetailClient() {
 
       if (controller.signal.aborted) return;
 
-      // Use posMarker values directly as textStart, link textEnd from next
       const allSCsFlat = chapters.flatMap((ch) => ch.subChapters);
       for (const sc of allSCsFlat) {
         if (sc.posMarker != null) {
@@ -669,7 +634,6 @@ export default function ProjectDetailClient() {
               settings.language,
             );
             if (controller.signal.aborted) return;
-            // Immutable update — build a new chapters array
             const updatedSubChapter = {
               ...sc,
               knowledgePoints: knowledge.knowledgePoints,
@@ -685,7 +649,6 @@ export default function ProjectDetailClient() {
             const updatedChapters = [...chapters];
             updatedChapters[ci] = updatedChapter;
             chapters = updatedChapters;
-            // Update UI state after each subchapter so user sees progress
             setProject({ ...initialProject, chapters });
           } catch (e) {
             if (controller.signal.aborted) return;
@@ -698,10 +661,8 @@ export default function ProjectDetailClient() {
           }
         }
       }
-      // Single final save to disk with fully-populated chapters
       if (!controller.signal.aborted) {
         await saveProject({ ...initialProject, chapters });
-        // Success notification and JSON download
         const totalSCs = chapters.reduce(
           (a, ch) => a + ch.subChapters.length,
           0,
@@ -713,36 +674,6 @@ export default function ProjectDetailClient() {
             `${chapters.length} chapters, ${totalSCs} sections generated`,
             "success",
           );
-          // Download chapters as JSON
-          const exportData = chapters.map((ch) => ({
-            chapter: ch.title,
-            subChapters: ch.subChapters.map((sc) => ({
-              title: sc.title,
-              posMarker: sc.posMarker,
-              endPosMarker: sc.endPosMarker,
-              knowledgePoints: sc.knowledgePoints.map((kp) => ({
-                title: kp.title,
-                content: kp.content,
-              })),
-              examples: sc.examples.map((ex) => ({
-                question: ex.question,
-                solution: ex.solution,
-              })),
-              exercises: sc.exercises.map((hw) => ({
-                question: hw.question,
-                solution: hw.solution,
-              })),
-            })),
-          }));
-          const blob = new Blob([JSON.stringify(exportData, null, 2)], {
-            type: "application/json",
-          });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = `${initialProject.name}_chapters.json`;
-          a.click();
-          URL.revokeObjectURL(url);
         }
       }
       if (failedCount > 0) {
@@ -792,7 +723,6 @@ export default function ProjectDetailClient() {
       );
       if (chapterIndex === -1) return;
 
-      // Snapshot project once
       const initialProject = project;
       const controller = new AbortController();
       abortRef.current = controller;
@@ -817,7 +747,6 @@ export default function ProjectDetailClient() {
           .join("");
         if (controller.signal.aborted) return;
 
-        // Build a new chapters array immutably
         let chapters = initialProject.chapters;
         let failedCount = 0;
         const subChapters = chapters[chapterIndex].subChapters;
@@ -849,7 +778,6 @@ export default function ProjectDetailClient() {
               settings.language,
             );
             if (controller.signal.aborted) return;
-            // Immutable update
             const updatedSubChapters = [...chapters[chapterIndex].subChapters];
             updatedSubChapters[si] = {
               ...sc,
@@ -968,7 +896,6 @@ export default function ProjectDetailClient() {
       ch.subChapters.some((sc) => sc.id === selectedSubChapterId),
     ) ?? null;
 
-  // Navigation: prev/next subchapter
   const allSubs = project?.chapters.flatMap((ch) => ch.subChapters) ?? [];
   const currentIndex = allSubs.findIndex(
     (sc) => sc.id === selectedSubChapterId,
@@ -980,18 +907,13 @@ export default function ProjectDetailClient() {
 
   if (!loaded)
     return (
-      <div className="flex h-[calc(100vh-3.5rem)] overflow-hidden">
-        <div className="w-[280px] shrink-0 border-r bg-card/40 p-4 space-y-4">
-          <div className="h-5 w-32 bg-muted rounded animate-pulse" />
-          <div className="space-y-3">
-            <div className="h-4 w-full bg-muted rounded animate-pulse" />
-            <div className="h-4 w-3/4 bg-muted rounded animate-pulse" />
-            <div className="h-4 w-1/2 bg-muted rounded animate-pulse" />
+      <div className="flex items-center justify-center h-[calc(100vh-3.5rem)]">
+        <div className="space-y-4 w-full max-w-2xl px-6">
+          <div className="h-8 w-64 bg-muted rounded-lg animate-pulse" />
+          <div className="flex gap-4">
+            <div className="h-[60vh] w-[280px] bg-muted rounded-xl animate-pulse shrink-0" />
+            <div className="flex-1 h-[60vh] bg-muted rounded-xl animate-pulse" />
           </div>
-        </div>
-        <div className="flex-1 flex flex-col">
-          <div className="shrink-0 h-[41px] border-b bg-card/40" />
-          <div className="flex-1" />
         </div>
       </div>
     );
@@ -1014,7 +936,6 @@ export default function ProjectDetailClient() {
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)] overflow-hidden">
-      {/* Hidden file inputs */}
       <input
         ref={textbookInputRef}
         type="file"
@@ -1052,8 +973,6 @@ export default function ProjectDetailClient() {
         }}
       />
 
-      {/* Left Sidebar - toggle visibility on desktop, overlay on mobile */}
-      {/* Mobile overlay */}
       {sidebarWidth > 0 && (
         <div
           className="md:hidden fixed inset-0 z-40"
@@ -1062,10 +981,11 @@ export default function ProjectDetailClient() {
       )}
       <div
         className={cn(
-          "border-r bg-card/40 md:bg-transparent backdrop-blur-md md:backdrop-blur-none flex flex-col shrink-0 overflow-hidden min-h-0",
+          "border-r bg-card/40 md:bg-transparent backdrop-blur-md md:backdrop-blur-none flex flex-col shrink-0",
           "max-md:rounded-r-2xl",
-          sidebarWidth === 0 && "border-r-0",
+          sidebarWidth === 0 && "overflow-hidden border-r-0",
           "fixed top-14 left-0 bottom-0 z-50 md:static",
+          "transition-transform duration-300 ease-in-out md:transition-[width] md:duration-200",
           "w-[85vw] md:w-auto",
           sidebarWidth > 0
             ? "translate-x-0"
@@ -1075,9 +995,9 @@ export default function ProjectDetailClient() {
           width: sidebarWidth,
           minWidth: 0,
           maxWidth: "85vw",
+          transition: dragging ? "none" : "width 0.2s",
         }}
       >
-        {/* Resize handle */}
         {sidebarWidth > 0 && (
           <div
             className="absolute top-0 -right-1.5 w-3 h-full cursor-col-resize hover:bg-primary/30 active:bg-primary/50 z-20"
@@ -1088,13 +1008,7 @@ export default function ProjectDetailClient() {
             }}
           />
         )}
-        <div
-          className="shrink-0 px-4 py-3 border-b bg-card/80"
-          style={{
-            backdropFilter: "blur(12px)",
-            WebkitBackdropFilter: "blur(12px)",
-          }}
-        >
+        <div className="shrink-0 px-4 py-3 border-b">
           <div className="flex items-center gap-2">
             <span className="text-2xl">{project.icon}</span>
             <div className="flex-1 min-w-0">
@@ -1131,9 +1045,8 @@ export default function ProjectDetailClient() {
             </Button>
           </div>
         </div>
-        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+        <div className="flex-1 min-h-0 overflow-y-auto">
           <div className="p-2">
-            {/* Chapter Tree */}
             <div>
               <div className="flex items-center justify-between px-3 mb-2 mt-1">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -1199,7 +1112,7 @@ export default function ProjectDetailClient() {
                 </div>
               )}
               <div className="space-y-1">
-                {project.chapters?.map((chapter) => (
+                {project.chapters.map((chapter) => (
                   <ChapterTreeNode
                     key={chapter.id}
                     chapter={chapter}
@@ -1226,29 +1139,14 @@ export default function ProjectDetailClient() {
           </div>
         </div>
 
-        {/* Draggable divider between chapters and materials */}
-        <div
-          className="relative shrink-0 h-2 cursor-row-resize group hover:bg-primary/20 active:bg-primary/30 transition-colors"
-          onMouseDown={(e) => {
-            e.preventDefault();
-            materialsDragStart.current = { my: e.clientY, h: materialsHeight };
-            setDraggingMaterials(true);
-          }}
-        >
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-0.5 rounded-full bg-border group-hover:bg-primary/50 transition-colors" />
-        </div>
+        <Separator />
 
-        {/* Materials Section with own scroll */}
-        <div
-          className="shrink-0 overflow-y-auto overscroll-contain"
-          style={{ height: materialsHeight }}
-        >
+        <div className="shrink-0 overflow-y-auto max-h-[45%]">
           <div className="p-2 space-y-3">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2">
               {t("project.materials")}
             </p>
 
-            {/* Textbooks */}
             <MaterialSection
               icon={BookOpen}
               label={t("project.textbooks")}
@@ -1271,7 +1169,6 @@ export default function ProjectDetailClient() {
               }
             />
 
-            {/* Exercises */}
             <MaterialSection
               icon={FileText}
               label={t("project.exercises")}
@@ -1294,7 +1191,6 @@ export default function ProjectDetailClient() {
               }
             />
 
-            {/* Exams */}
             <MaterialSection
               icon={GraduationCap}
               label={t("project.exams")}
@@ -1320,15 +1216,8 @@ export default function ProjectDetailClient() {
         </div>
       </div>
 
-      {/* Center: Study Viewer */}
-      <div className="flex-1 flex flex-col min-w-0">
-        <div
-          className="shrink-0 flex items-center gap-2 px-4 py-2 border-b bg-card/80 min-h-[41px]"
-          style={{
-            backdropFilter: "blur(12px)",
-            WebkitBackdropFilter: "blur(12px)",
-          }}
-        >
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <div className="shrink-0 flex items-center gap-2 px-4 py-2 border-b bg-card/40 backdrop-blur-md min-h-[41px]">
           {sidebarWidth === 0 && (
             <Button
               variant="ghost"
@@ -1389,7 +1278,7 @@ export default function ProjectDetailClient() {
             </div>
           </div>
         ) : (
-          <ScrollArea className="flex-1 h-full overscroll-contain [&_[data-slot=scroll-area-viewport]]:ring-0 [&_[data-slot=scroll-area-viewport]]:outline-none">
+          <ScrollArea className="flex-1 h-full">
             {selectedSubChapter ? (
               <>
                 <StudyUnitViewer
@@ -1421,7 +1310,6 @@ export default function ProjectDetailClient() {
         )}
       </div>
 
-      {/* Generating Toast */}
       {generatingToast && (
         <GeneratingToast
           message={t("project.generating")}
@@ -1448,8 +1336,6 @@ export default function ProjectDetailClient() {
     </div>
   );
 }
-
-// ── Material Section ────────────────────────────────────────────────────
 
 function MaterialSection({
   icon: Icon,
@@ -1533,8 +1419,6 @@ function MaterialSection({
   );
 }
 
-// ── Chapter Tree Node ───────────────────────────────────────────────────
-
 function ChapterTreeNode({
   chapter,
   selectedSubChapterId,
@@ -1569,23 +1453,15 @@ function ChapterTreeNode({
 
   const isNative = chapter.type === "native";
   const { t: ct } = useLocale();
-  const [open, setOpen] = useState(true);
 
   return (
-    <Collapsible defaultOpen onOpenChange={setOpen}>
-      <div className="flex items-center gap-0.5 rounded-lg px-2 py-1.5 hover:bg-muted/30 hover:backdrop-blur-md transition-all">
+    <Collapsible defaultOpen>
+      <div className="flex items-center gap-0.5 rounded-lg px-2 py-1.5 group hover:bg-muted/30 hover:backdrop-blur-md transition-all">
         <CollapsibleTrigger className="flex flex-1 items-center gap-1.5 text-sm font-semibold min-w-0">
-          <ChevronRight
-            className={cn(
-              "size-4 text-muted-foreground shrink-0 transition-transform duration-200",
-              open && "rotate-90",
-            )}
-          />
+          <ChevronDown className="size-4 text-muted-foreground shrink-0 transition-transform group-aria-expanded:rotate-180" />
           <span className="flex-1 text-left truncate">{chapter.title}</span>
         </CollapsibleTrigger>
-        {/* Right-side area: badge+count ↔ action buttons swap on hover */}
         <div className="relative shrink-0 flex items-center">
-          {/* Badge + Count — visible by default, hidden on hover */}
           <div className="flex items-center gap-1 group-hover:opacity-0 transition-opacity max-md:hidden">
             <Badge
               variant="outline"
@@ -1604,7 +1480,6 @@ function ChapterTreeNode({
               </span>
             )}
           </div>
-          {/* Action buttons — hidden by default, visible on hover (overlays the same spot) */}
           <div className="absolute inset-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 max-md:opacity-100 max-md:relative max-md:inset-auto transition-opacity">
             {isNative && onRegenerateChapter && (
               <button
@@ -1727,8 +1602,6 @@ function ChapterTreeNode({
   );
 }
 
-// ── Study Unit Viewer ───────────────────────────────────────────────────
-
 function StudyUnitViewer({
   subChapter,
   onToggleComplete,
@@ -1830,7 +1703,6 @@ function StudyUnitViewer({
 
   return (
     <div className="max-w-3xl mx-auto px-4 md:px-8 py-6 md:py-8 space-y-8 md:space-y-10">
-      {/* ── Header ── */}
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-2">
           <h1 className="text-3xl font-bold leading-snug">
@@ -1885,7 +1757,6 @@ function StudyUnitViewer({
         </div>
       </div>
 
-      {/* ── Knowledge Points ── */}
       <section className="space-y-4">
         <div className="flex items-center gap-2.5">
           <div className="size-7 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
@@ -1955,7 +1826,6 @@ function StudyUnitViewer({
                 </div>
               ) : (
                 <>
-                  {/* Card header */}
                   <div className="flex items-center justify-between gap-2 px-5 py-3 border-b bg-muted/30">
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="size-5 rounded-full bg-primary/15 flex items-center justify-center text-[10px] font-bold text-primary shrink-0">
@@ -1979,7 +1849,6 @@ function StudyUnitViewer({
                       <Pencil className="size-3" />
                     </Button>
                   </div>
-                  {/* Card body */}
                   <div className="px-5 py-4 text-base leading-relaxed">
                     <Markdown content={kp.content} />
                   </div>
@@ -2032,7 +1901,7 @@ function StudyUnitViewer({
               <Button
                 variant="outline"
                 size="sm"
-                className={`w-full border-dashed gap-1.5 text-muted-foreground hover:text-foreground transition-opacity ${editMode ? "opacity-100" : "hidden"}`}
+                className="w-full border-dashed gap-1.5 text-muted-foreground hover:text-foreground"
                 onClick={() => setAddingType("kp")}
               >
                 <Plus className="size-3.5" />
@@ -2043,7 +1912,6 @@ function StudyUnitViewer({
         </div>
       </section>
 
-      {/* ── Examples ── */}
       <section className="space-y-4">
         <div className="flex items-center gap-2.5">
           <div className="size-7 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
@@ -2076,7 +1944,7 @@ function StudyUnitViewer({
                         variant="ghost"
                         className="size-7"
                         onClick={() => {
-                          const updated = {
+                          const u = {
                             ...subChapter,
                             examples: subChapter.examples.map((e) =>
                               e.id === ex.id
@@ -2088,7 +1956,7 @@ function StudyUnitViewer({
                                 : e,
                             ),
                           };
-                          onUpdate(updated);
+                          onUpdate(u);
                           setEditingExampleId(null);
                         }}
                         title={tv("common.save")}
@@ -2108,12 +1976,11 @@ function StudyUnitViewer({
                   </div>
                 ) : (
                   <>
-                    {/* Question row */}
-                    <div className="flex items-start gap-0 border-b border-border/50">
+                    <div className="flex items-start gap-0 border-b border-border/50 group/trigger">
                       <span className="shrink-0 w-9 pt-4 text-center text-sm font-bold text-amber-500/80">
                         Q{exIdx + 1}
                       </span>
-                      <CollapsibleTrigger className="group/trigger flex flex-1 items-start gap-2 px-3 py-3.5 text-left">
+                      <CollapsibleTrigger className="flex flex-1 items-start gap-2 px-3 py-3.5 text-left">
                         <span className="flex-1 text-base leading-relaxed">
                           <Markdown content={ex.question} />
                         </span>
@@ -2133,7 +2000,6 @@ function StudyUnitViewer({
                         <Pencil className="size-3.5" />
                       </Button>
                     </div>
-                    {/* Solution row */}
                     <CollapsibleContent>
                       <div className="flex items-start gap-0 bg-amber-500/5">
                         <span className="shrink-0 w-8 pt-3.5 text-center text-xs font-bold text-amber-600/60">
@@ -2141,22 +2007,6 @@ function StudyUnitViewer({
                         </span>
                         <div className="flex-1 px-3 py-3.5 text-base leading-relaxed border-l border-amber-500/20">
                           <Markdown content={ex.solution} />
-                          {ex.relatedKnowledgePoints &&
-                            ex.relatedKnowledgePoints.length > 0 && (
-                              <div className="flex flex-wrap gap-1 mt-3 pt-3 border-t border-amber-500/20">
-                                <span className="text-xs text-muted-foreground">
-                                  关联知识点：
-                                </span>
-                                {ex.relatedKnowledgePoints.map((kp, i) => (
-                                  <span
-                                    key={i}
-                                    className="inline-flex items-center rounded-md bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-600"
-                                  >
-                                    {kp}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
                         </div>
                       </div>
                     </CollapsibleContent>
@@ -2210,7 +2060,7 @@ function StudyUnitViewer({
               <Button
                 variant="outline"
                 size="sm"
-                className={`w-full border-dashed gap-1.5 text-muted-foreground hover:text-foreground transition-opacity ${editMode ? "opacity-100" : "hidden"}`}
+                className="w-full border-dashed gap-1.5 text-muted-foreground hover:text-foreground"
                 onClick={() => setAddingType("example")}
               >
                 <Plus className="size-3.5" />
@@ -2221,7 +2071,6 @@ function StudyUnitViewer({
         </div>
       </section>
 
-      {/* ── Exercises ── */}
       <section className="space-y-4">
         <div className="flex items-center gap-2.5">
           <div className="size-7 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
@@ -2256,7 +2105,7 @@ function StudyUnitViewer({
                         variant="ghost"
                         className="size-7"
                         onClick={() => {
-                          const updated = {
+                          const u = {
                             ...subChapter,
                             exercises: subChapter.exercises.map((e) =>
                               e.id === ex.id
@@ -2268,7 +2117,7 @@ function StudyUnitViewer({
                                 : e,
                             ),
                           };
-                          onUpdate(updated);
+                          onUpdate(u);
                           setEditingExerciseId(null);
                         }}
                         title={tv("common.save")}
@@ -2288,12 +2137,11 @@ function StudyUnitViewer({
                   </div>
                 ) : (
                   <>
-                    {/* Question row */}
-                    <div className="flex items-start gap-0 border-b border-border/50">
+                    <div className="flex items-start gap-0 border-b border-border/50 group/trigger">
                       <span className="shrink-0 w-9 pt-4 text-center text-sm font-bold text-emerald-600/80">
                         {idx + 1}
                       </span>
-                      <CollapsibleTrigger className="group/trigger flex flex-1 items-start gap-2 px-3 py-3.5 text-left">
+                      <CollapsibleTrigger className="flex flex-1 items-start gap-2 px-3 py-3.5 text-left">
                         <span className="flex-1 text-base leading-relaxed">
                           <Markdown content={ex.question} />
                         </span>
@@ -2313,7 +2161,6 @@ function StudyUnitViewer({
                         <Pencil className="size-3.5" />
                       </Button>
                     </div>
-                    {/* Solution row */}
                     <CollapsibleContent>
                       <div className="flex items-start gap-0 bg-emerald-500/5">
                         <span className="shrink-0 w-8 pt-3.5 text-center text-xs font-bold text-emerald-600/60">
@@ -2321,22 +2168,6 @@ function StudyUnitViewer({
                         </span>
                         <div className="flex-1 px-3 py-3.5 text-base leading-relaxed border-l border-emerald-500/20">
                           <Markdown content={ex.solution} />
-                          {ex.relatedKnowledgePoints &&
-                            ex.relatedKnowledgePoints.length > 0 && (
-                              <div className="flex flex-wrap gap-1 mt-3 pt-3 border-t border-emerald-500/20">
-                                <span className="text-xs text-muted-foreground">
-                                  关联知识点：
-                                </span>
-                                {ex.relatedKnowledgePoints.map((kp, i) => (
-                                  <span
-                                    key={i}
-                                    className="inline-flex items-center rounded-md bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-600"
-                                  >
-                                    {kp}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
                         </div>
                       </div>
                     </CollapsibleContent>
@@ -2390,7 +2221,7 @@ function StudyUnitViewer({
               <Button
                 variant="outline"
                 size="sm"
-                className={`w-full border-dashed gap-1.5 text-muted-foreground hover:text-foreground transition-opacity ${editMode ? "opacity-100" : "hidden"}`}
+                className="w-full border-dashed gap-1.5 text-muted-foreground hover:text-foreground"
                 onClick={() => setAddingType("exercise")}
               >
                 <Plus className="size-3.5" />
@@ -2400,7 +2231,6 @@ function StudyUnitViewer({
           )}
         </div>
       </section>
-      {/* Prev/Next navigation */}
       <div className="flex items-center justify-center gap-4 pt-2 pb-24 md:pb-10">
         <Button
           variant="outline"
@@ -2427,8 +2257,6 @@ function StudyUnitViewer({
   );
 }
 
-// ── Generating Toast ──────────────────────────────────────────────────
-
 function GeneratingToast({
   message,
   hint,
@@ -2442,7 +2270,6 @@ function GeneratingToast({
     const t = setTimeout(onClose, 5000);
     return () => clearTimeout(t);
   }, [onClose]);
-
   return (
     <div className="fixed top-16 right-6 z-50 motion-preset-slide-down motion-duration-300">
       <div className="flex items-center gap-3 bg-amber-500 text-white px-5 py-3 rounded-xl shadow-2xl">

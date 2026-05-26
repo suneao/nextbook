@@ -198,6 +198,16 @@ export async function loadAllProjects(): Promise<Project[]> {
   }
 }
 
+export async function loadProjectById(id: string): Promise<Project | null> {
+  const raw = await loadData("project-" + id);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
 export async function saveProject(project: Project): Promise<void> {
   await saveData("project-" + project.id, JSON.stringify(project));
   // Update index
