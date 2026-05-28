@@ -150,16 +150,25 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           return (
             <div
               key={t.id}
-              className={`pointer-events-auto flex items-center gap-3 ${colors[t.type]} text-white px-4 py-3 rounded-xl shadow-2xl transition-all duration-300 ${
+              onClick={() => {
+                const el = document.getElementById(`toast-msg-${t.id}`);
+                if (el) el.classList.toggle("line-clamp-2");
+              }}
+              className={`pointer-events-auto flex items-center gap-3 ${colors[t.type]} text-white px-4 py-3 rounded-xl shadow-2xl transition-all duration-300 cursor-pointer max-w-sm ${
                 leaving
                   ? "opacity-0 translate-x-4 scale-95"
                   : "opacity-100 translate-x-0 scale-100 animate-in fade-in slide-in-from-top-2 duration-300"
               }`}
             >
               <Icon className="size-4 shrink-0" />
-              <p className="text-sm">{t.message}</p>
+              <p id={`toast-msg-${t.id}`} className="text-sm line-clamp-2">
+                {t.message}
+              </p>
               <button
-                onClick={() => dismiss(t.id)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  dismiss(t.id);
+                }}
                 className="ml-2 shrink-0 opacity-70 hover:opacity-100"
               >
                 <X className="size-3.5" />
