@@ -774,7 +774,28 @@ export default function ProjectDetailClient() {
         if (controller.signal.aborted) break;
       }
 
-      // Merge all results atomically
+      // Merge all results into latest state atomically
+      setProject((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          chapters: prev.chapters.map((ch) => ({
+            ...ch,
+            subChapters: ch.subChapters.map((sc) => {
+              const r = results.get(sc.id);
+              if (!r) return sc;
+              return {
+                ...sc,
+                knowledgePoints: r.knowledgePoints,
+                examples: r.examples,
+                exercises: r.exercises,
+              };
+            }),
+          })),
+        };
+      });
+
+      // Merge local chapters for save
       chapters = chapters.map((ch) => ({
         ...ch,
         subChapters: ch.subChapters.map((sc) => {
@@ -788,7 +809,7 @@ export default function ProjectDetailClient() {
           };
         }),
       }));
-      setProject({ ...initialProject, chapters });
+      setProject((prev) => (prev ? { ...prev, chapters } : prev));
 
       if (!controller.signal.aborted) {
         await saveProject({ ...initialProject, chapters });
@@ -1041,7 +1062,7 @@ export default function ProjectDetailClient() {
           .join("");
         if (controller.signal.aborted) return;
 
-        let chapters = [...initialProject.chapters];
+        const chapters: Chapter[] = [...initialProject.chapters];
         let completedCount = 0;
         let failedCount = 0;
         const subChapters = chapters[chapterIndex].subChapters;
@@ -1104,31 +1125,49 @@ export default function ProjectDetailClient() {
           if (controller.signal.aborted) break;
         }
 
-        // Merge all results atomically
-        const mergedSubChapters = chapters[chapterIndex].subChapters.map(
-          (sc, i) => {
-            const r = results[i];
-            if (!r) return sc;
-            return {
-              ...sc,
-              knowledgePoints: r.knowledgePoints,
-              examples: r.examples,
-              exercises: r.exercises,
-            };
-          },
-        );
-        chapters = [
-          ...chapters.slice(0, chapterIndex),
-          { ...chapters[chapterIndex], subChapters: mergedSubChapters },
-          ...chapters.slice(chapterIndex + 1),
-        ];
-        setProject({ ...initialProject, chapters });
+        // Merge all results into latest state atomically
+        setProject((prev) => {
+          if (!prev) return prev;
+          const latest = prev.chapters;
+          const mergedSubChapters =
+            latest[chapterIndex]?.subChapters.map((sc, i) => {
+              const r = results[i];
+              if (!r) return sc;
+              return {
+                ...sc,
+                knowledgePoints: r.knowledgePoints,
+                examples: r.examples,
+                exercises: r.exercises,
+              };
+            }) || [];
+          const mergedChapters = [
+            ...latest.slice(0, chapterIndex),
+            { ...latest[chapterIndex], subChapters: mergedSubChapters },
+            ...latest.slice(chapterIndex + 1),
+          ];
+          return { ...prev, chapters: mergedChapters };
+        });
 
         if (failedCount > 0) {
           toast(failedCount + " section(s) failed to regenerate.", "warning");
         }
         if (!controller.signal.aborted) {
-          await saveProject({ ...initialProject, chapters });
+          // Save the merged result directly from latest state
+          const saved = chapters;
+          saved[chapterIndex] = {
+            ...saved[chapterIndex],
+            subChapters: saved[chapterIndex].subChapters.map((sc, i) => {
+              const r = results[i];
+              if (!r) return sc;
+              return {
+                ...sc,
+                knowledgePoints: r.knowledgePoints,
+                examples: r.examples,
+                exercises: r.exercises,
+              };
+            }),
+          };
+          await saveProject({ ...initialProject, chapters: saved });
         }
       } catch (e) {
         if (e instanceof Error && e.name === "AbortError") return;
