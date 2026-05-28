@@ -72,14 +72,18 @@ async function openAICompletion(
 
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(`API error ${res.status}: ${err}`);
+    let msg = err;
+    try {
+      const parsed = JSON.parse(err);
+      msg = parsed?.error?.message || parsed?.message || err;
+    } catch {}
+    throw new Error(msg.length > 200 ? msg.slice(0, 200) + "..." : msg);
   }
 
   const data = await res.json();
   const message = data.choices?.[0]?.message;
-  // DeepSeek V4 Flash (and other reasoning models) may return
-  // the response in `reasoning_content` while `content` is empty.
-  const result = message?.content || message?.reasoning_content || "";
+  const result =
+    message?.content?.trim() || message?.reasoning_content?.trim() || "";
 
   // Log warning if finish_reason is not "stop" (e.g. "length" = truncated)
   const finishReason = data.choices?.[0]?.finish_reason;
@@ -125,7 +129,12 @@ async function anthropicCompletion(
 
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(`Anthropic API error ${res.status}: ${err}`);
+    let msg = err;
+    try {
+      const parsed = JSON.parse(err);
+      msg = parsed?.error?.message || parsed?.message || err;
+    } catch {}
+    throw new Error(msg.length > 200 ? msg.slice(0, 200) + "..." : msg);
   }
 
   const data = await res.json();
