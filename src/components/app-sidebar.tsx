@@ -48,7 +48,8 @@ export function AppSidebar({
   return (
     <aside
       className={cn(
-        "hidden md:flex sticky top-14 flex-col border-r bg-card/40 backdrop-blur-md shrink-0",
+        "hidden md:flex sticky top-14 flex-col border-r bg-card/40 backdrop-blur-md shrink-0 group/sidebar",
+        "transition-[width] duration-300 ease-in-out",
         collapsed ? "w-[56px]" : "w-[240px]",
       )}
     >
@@ -67,9 +68,9 @@ export function AppSidebar({
           title={collapsed ? "展开侧栏" : "收起侧栏"}
         >
           {collapsed ? (
-            <ChevronRight className="size-5" />
+            <ChevronRight className="size-5 transition-transform duration-300 ease-in-out" />
           ) : (
-            <ChevronLeft className="size-5" />
+            <ChevronLeft className="size-5 transition-transform duration-300 ease-in-out" />
           )}
         </Button>
       </div>

@@ -94,37 +94,43 @@ export function MobileBottomNav() {
             <span className="text-[10px] font-medium">更多</span>
           </button>
 
-          {moreOpen &&
-            createPortal(
-              <div
-                ref={menuRef}
-                className="fixed bottom-[calc(4rem+16px+env(safe-area-inset-bottom,0px))] right-4 w-44 bg-card/40 backdrop-blur-md border rounded-xl shadow-2xl overflow-hidden z-50"
-              >
-                {secondaryItems.map((item) => {
-                  const active =
-                    pathname === item.href ||
-                    (item.href !== "/" && pathname.startsWith(item.href));
-                  const Icon = item.icon;
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      onClick={() => setMoreOpen(false)}
-                      className={cn(
-                        "flex items-center gap-3 px-4 py-3 text-sm transition-colors",
-                        active
-                          ? "bg-primary/10 text-primary font-medium"
-                          : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                      )}
-                    >
-                      <Icon className="size-4 shrink-0" />
-                      <span>{item.label}</span>
-                    </Link>
-                  );
-                })}
-              </div>,
-              document.body,
-            )}
+          {createPortal(
+            <div
+              ref={menuRef}
+              className={cn(
+                "fixed bottom-[calc(4rem+16px+env(safe-area-inset-bottom,0px))] right-4 w-44",
+                "bg-card/40 backdrop-blur-md border rounded-xl shadow-2xl overflow-hidden z-50",
+                "transition-all duration-200 ease-out origin-bottom-right",
+                moreOpen
+                  ? "opacity-100 scale-100 translate-y-0"
+                  : "opacity-0 scale-95 translate-y-2 pointer-events-none",
+              )}
+            >
+              {secondaryItems.map((item) => {
+                const active =
+                  pathname === item.href ||
+                  (item.href !== "/" && pathname.startsWith(item.href));
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMoreOpen(false)}
+                    className={cn(
+                      "flex items-center gap-3 px-4 py-3 text-sm transition-colors",
+                      active
+                        ? "bg-primary/10 text-primary font-medium"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                    )}
+                  >
+                    <Icon className="size-4 shrink-0" />
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })}
+            </div>,
+            document.body,
+          )}
         </div>
       </div>
     </nav>

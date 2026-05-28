@@ -160,21 +160,43 @@ export default function ProjectDetailClient() {
   const [generatingToast, setGeneratingToast] = useState(false);
   const dragStart = useRef({ mx: 0, w: 280 });
   const [loaded, setLoaded] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Detect mobile screen size
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  // Close sidebar helper (used on mobile after selection)
+  const closeSidebarIfMobile = useCallback(() => {
+    if (window.innerWidth < 768) setSidebarWidth(0);
+  }, []);
+
   useEffect(() => {
     if (!dragging) return;
-    const handleMouseMove = (e: MouseEvent) => {
-      const delta = e.clientX - dragStart.current.mx;
-      const w = Math.max(200, Math.min(500, dragStart.current.w + delta));
+    const handleMove = (clientX: number) => {
+      const delta = clientX - dragStart.current.mx;
+      const maxW = isMobile ? window.innerWidth * 0.9 : 500;
+      const w = Math.max(200, Math.min(maxW, dragStart.current.w + delta));
       setSidebarWidth(w);
     };
-    const handleMouseUp = () => setDragging(false);
+    const handleMouseMove = (e: MouseEvent) => handleMove(e.clientX);
+    const handleTouchMove = (e: TouchEvent) => handleMove(e.touches[0].clientX);
+    const handleEnd = () => setDragging(false);
     window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleMouseUp);
+    window.addEventListener("mouseup", handleEnd);
+    window.addEventListener("touchmove", handleTouchMove, { passive: false });
+    window.addEventListener("touchend", handleEnd);
     return () => {
       window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("mouseup", handleEnd);
+      window.removeEventListener("touchmove", handleTouchMove);
+      window.removeEventListener("touchend", handleEnd);
     };
-  }, [dragging]);
+  }, [dragging, isMobile]);
 
   const toggleSidebar = () => {
     setSidebarWidth((w) => (w === 0 ? 280 : 0));
@@ -975,37 +997,52 @@ export default function ProjectDetailClient() {
         }}
       />
 
-      {sidebarWidth > 0 && (
-        <div
-          className="md:hidden fixed inset-0 z-40"
-          onClick={() => setSidebarWidth(0)}
-        />
-      )}
+      {/* Mobile backdrop overlay with fade animation */}
       <div
         className={cn(
-          "border-r bg-card/40 md:bg-transparent backdrop-blur-md md:backdrop-blur-none flex flex-col shrink-0",
+          "md:hidden fixed inset-0 z-40",
+          "transition-opacity duration-300 ease-in-out",
+          sidebarWidth > 0
+            ? "opacity-100 pointer-events-auto"
+            : "opacity-0 pointer-events-none",
+        )}
+        onClick={() => setSidebarWidth(0)}
+      />
+      <div
+        className={cn(
+          "border-r backdrop-blur-xl md:bg-transparent md:backdrop-blur-none flex flex-col shrink-0",
           "max-md:rounded-r-2xl",
-          sidebarWidth === 0 && "overflow-hidden border-r-0",
+          sidebarWidth === 0 && !isMobile && "overflow-hidden border-r-0",
           "fixed top-14 left-0 bottom-0 z-50 md:static",
-          "transition-transform duration-300 ease-in-out md:transition-[width] md:duration-200",
-          "w-[85vw] md:w-auto",
+          dragging
+            ? "transition-none"
+            : "transition-all duration-300 ease-in-out md:transition-[width] md:duration-200",
+          isMobile ? "w-[85vw]" : "md:w-auto",
           sidebarWidth > 0
             ? "translate-x-0"
             : "-translate-x-full md:translate-x-0",
         )}
         style={{
-          width: sidebarWidth,
-          minWidth: 0,
-          maxWidth: "85vw",
-          transition: dragging ? "none" : "width 0.2s",
+          width: isMobile
+            ? sidebarWidth > 0
+              ? sidebarWidth
+              : undefined
+            : sidebarWidth,
+          minWidth: isMobile ? 200 : 0,
+          maxWidth: isMobile ? "90vw" : "85vw",
         }}
       >
         {sidebarWidth > 0 && (
           <div
-            className="absolute top-0 -right-1.5 w-3 h-full cursor-col-resize hover:bg-primary/30 active:bg-primary/50 z-20"
+            className="absolute top-0 -right-1.5 w-4 h-full cursor-col-resize hover:bg-primary/30 active:bg-primary/50 z-20 touch-none"
             onMouseDown={(e) => {
               e.preventDefault();
               dragStart.current = { mx: e.clientX, w: sidebarWidth };
+              setDragging(true);
+            }}
+            onTouchStart={(e) => {
+              e.preventDefault();
+              dragStart.current = { mx: e.touches[0].clientX, w: sidebarWidth };
               setDragging(true);
             }}
           />
@@ -1037,14 +1074,20 @@ export default function ProjectDetailClient() {
                 ) : null;
               })()}
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-6"
+            <button
+              type="button"
+              className={cn(
+                "flex items-center justify-center shrink-0",
+                "size-7 rounded-md",
+                "text-muted-foreground hover:text-foreground",
+                "hover:bg-muted/60",
+                "active:scale-95 transition-all duration-200",
+              )}
               onClick={() => toggleSidebar()}
+              title={t("common.close") || "关闭"}
             >
-              <X className="size-3" />
-            </Button>
+              <ChevronLeft className="size-4" />
+            </button>
           </div>
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto">
@@ -1121,6 +1164,7 @@ export default function ProjectDetailClient() {
                     selectedSubChapterId={selectedSubChapterId}
                     onSelect={(scId) => {
                       setSelectedSubChapterId(scId);
+                      closeSidebarIfMobile();
                     }}
                     addingSubToChapterId={addingSubToChapterId}
                     newSubChapterTitle={newSubChapterTitle}
@@ -1221,14 +1265,20 @@ export default function ProjectDetailClient() {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <div className="shrink-0 flex items-center gap-2 px-4 py-2 border-b bg-card/40 backdrop-blur-md min-h-[41px]">
           {sidebarWidth === 0 && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-8"
+            <button
+              type="button"
+              className={cn(
+                "flex items-center justify-center shrink-0",
+                "size-8 rounded-md",
+                "text-muted-foreground hover:text-foreground",
+                "hover:bg-muted/60",
+                "active:scale-95 transition-all duration-200",
+              )}
               onClick={() => toggleSidebar()}
+              title={t("common.expand") || "展开"}
             >
               <ChevronRight className="size-4" />
-            </Button>
+            </button>
           )}
           <Button
             variant="ghost"

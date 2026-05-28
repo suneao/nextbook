@@ -50,7 +50,7 @@ export default function RootLayout({
         className="h-full overflow-hidden flex flex-col"
         suppressHydrationWarning
       >
-        <div className="relative flex h-full flex-col bg-zinc-50 text-slate-950 dark:bg-zinc-950 dark:text-slate-100 overflow-hidden">
+        <div className="relative flex h-full flex-col bg-white text-slate-950 dark:bg-black dark:text-slate-100 overflow-hidden">
           <BackgroundBeams />
           <div className="relative z-10 h-full flex flex-col">
             <ThemeProvider defaultTheme="system">
