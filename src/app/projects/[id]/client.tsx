@@ -38,6 +38,9 @@ import {
   type Project,
   type Chapter,
   type SubChapter,
+  type KnowledgePoint,
+  type Example,
+  type Exercise,
   type Textbook,
   type ExercisePDF,
   type ExamPDF,
@@ -700,16 +703,26 @@ export default function ProjectDetailClient() {
       setProject({ ...initialProject, chapters });
 
       // Flatten all sub-chapters for parallel processing
-      const flatTasks: { ci: number; si: number; sc: SubChapter }[] = [];
+      const flatTasks: { sc: SubChapter }[] = [];
       for (let ci = 0; ci < chapters.length; ci++) {
         for (let si = 0; si < chapters[ci].subChapters.length; si++) {
-          flatTasks.push({ ci, si, sc: chapters[ci].subChapters[si] });
+          flatTasks.push({ sc: chapters[ci].subChapters[si] });
         }
       }
       const totalTasks = flatTasks.length;
 
       let failedCount = 0;
       let completedCount = 0;
+      // Collect results to avoid race conditions
+      const results = new Map<
+        string,
+        {
+          knowledgePoints: KnowledgePoint[];
+          examples: Example[];
+          exercises: Exercise[];
+        }
+      >();
+
       const updateProgress = () => {
         const done = completedCount + failedCount;
         updateTask(
@@ -721,7 +734,7 @@ export default function ProjectDetailClient() {
 
       // Process in parallel with concurrency limit of 3
       const CONCURRENCY = 3;
-      const taskFns = flatTasks.map(({ ci, si, sc }) => async () => {
+      const taskFns = flatTasks.map(({ sc }) => async () => {
         if (controller.signal.aborted) return;
         try {
           const textStart = sc.textStart ?? Math.floor(pdfText.length * 0.05);
@@ -740,24 +753,9 @@ export default function ProjectDetailClient() {
             settings.language,
           );
           if (controller.signal.aborted) return;
-          const updatedSubChapter: SubChapter = {
-            ...sc,
-            knowledgePoints: knowledge.knowledgePoints,
-            examples: knowledge.examples,
-            exercises: knowledge.exercises,
-          };
-          const updatedSubChapters = [...chapters[ci].subChapters];
-          updatedSubChapters[si] = updatedSubChapter;
-          const updatedChapter = {
-            ...chapters[ci],
-            subChapters: updatedSubChapters,
-          };
-          const updatedChapters = [...chapters];
-          updatedChapters[ci] = updatedChapter;
-          chapters = updatedChapters;
+          results.set(sc.id, knowledge);
           completedCount++;
           updateProgress();
-          setProject({ ...initialProject, chapters });
         } catch (e) {
           if (controller.signal.aborted) return;
           failedCount++;
@@ -775,6 +773,22 @@ export default function ProjectDetailClient() {
         await Promise.all(batch.map((t) => t()));
         if (controller.signal.aborted) break;
       }
+
+      // Merge all results atomically
+      chapters = chapters.map((ch) => ({
+        ...ch,
+        subChapters: ch.subChapters.map((sc) => {
+          const r = results.get(sc.id);
+          if (!r) return sc;
+          return {
+            ...sc,
+            knowledgePoints: r.knowledgePoints,
+            examples: r.examples,
+            exercises: r.exercises,
+          };
+        }),
+      }));
+      setProject({ ...initialProject, chapters });
 
       if (!controller.signal.aborted) {
         await saveProject({ ...initialProject, chapters });
@@ -1039,6 +1053,13 @@ export default function ProjectDetailClient() {
         };
         updateProgress();
 
+        // Collect results in a fixed array to avoid race conditions
+        const results: ({
+          knowledgePoints: KnowledgePoint[];
+          examples: Example[];
+          exercises: Exercise[];
+        } | null)[] = new Array(total).fill(null);
+
         // Process in parallel with concurrency limit of 3
         const CONCURRENCY = 3;
         const tasks = subChapters.map((sc, si) => async () => {
@@ -1061,22 +1082,9 @@ export default function ProjectDetailClient() {
               settings.language,
             );
             if (controller.signal.aborted) return;
-            const updatedSubChapters = [...chapters[chapterIndex].subChapters];
-            updatedSubChapters[si] = {
-              ...sc,
-              knowledgePoints: knowledge.knowledgePoints,
-              examples: knowledge.examples,
-              exercises: knowledge.exercises,
-            };
-            const updatedChapters = [...chapters];
-            updatedChapters[chapterIndex] = {
-              ...chapters[chapterIndex],
-              subChapters: updatedSubChapters,
-            };
-            chapters = updatedChapters;
+            results[si] = knowledge;
             completedCount++;
             updateProgress();
-            setProject({ ...initialProject, chapters });
           } catch (e) {
             if (controller.signal.aborted) return;
             failedCount++;
@@ -1095,6 +1103,26 @@ export default function ProjectDetailClient() {
           await Promise.all(batch.map((t) => t()));
           if (controller.signal.aborted) break;
         }
+
+        // Merge all results atomically
+        const mergedSubChapters = chapters[chapterIndex].subChapters.map(
+          (sc, i) => {
+            const r = results[i];
+            if (!r) return sc;
+            return {
+              ...sc,
+              knowledgePoints: r.knowledgePoints,
+              examples: r.examples,
+              exercises: r.exercises,
+            };
+          },
+        );
+        chapters = [
+          ...chapters.slice(0, chapterIndex),
+          { ...chapters[chapterIndex], subChapters: mergedSubChapters },
+          ...chapters.slice(chapterIndex + 1),
+        ];
+        setProject({ ...initialProject, chapters });
 
         if (failedCount > 0) {
           toast(failedCount + " section(s) failed to regenerate.", "warning");
