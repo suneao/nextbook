@@ -632,11 +632,10 @@ function parseChapterResponse(response: string): Chapter[] {
 }
 
 function sanitizeJsonString(s: string): string {
-  // JSON spec allows only these chars after \: " \ / n r t
-  // (b and f are excluded because they clash with LaTeX commands like \textbf, \frac;
-  //  u is handled separately to allow \uXXXX but escape \underline etc.)
-  // Any other \X (e.g. \{, \}, \[, \(, \^, \_, or any letter) is invalid JSON.
-  // We walk character-by-character to double-escape all invalid backslash sequences.
+  // JSON spec allows only these chars after \: " \ /
+  // All other \X sequences (including \n, \r, \t, \b, \f and any letter)
+  // are treated as unescaped LaTeX commands and will be double-escaped.
+  // \uXXXX is handled separately — only valid Unicode escapes pass through.
   const HEX_DIGIT = /^[0-9a-fA-F]$/;
 
   function isHex(ch: string): boolean {
@@ -652,11 +651,8 @@ function sanitizeJsonString(s: string): string {
         // Already an escaped backslash \\ — keep as-is and skip the second \
         result += "\\\\";
         i++;
-      } else if (next === '"' || next === "\\" || next === "/") {
-        // Always-valid JSON escapes: \", \\, \/
-        result += ch;
-      } else if (next === "n" || next === "r" || next === "t") {
-        // Newline, carriage return, tab — legitimate in content text
+      } else if (next === '"' || next === "/") {
+        // Valid JSON escapes: \", \/ — pass through as-is
         result += ch;
       } else if (
         next === "u" &&
