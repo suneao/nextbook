@@ -21,10 +21,12 @@ export function MobileBottomNav() {
   const { t } = useLocale();
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const btnRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    setMounted(true);
     const handler = (e: MouseEvent) => {
       const t = e.target as Node;
       if (
@@ -94,7 +96,7 @@ export function MobileBottomNav() {
             <span className="text-[10px] font-medium">更多</span>
           </button>
 
-          {typeof document !== "undefined" &&
+          {mounted &&
             createPortal(
               <div
                 ref={menuRef}

@@ -130,6 +130,9 @@ const dictionaries: Record<Locale, TranslationDict> = {
     "notification.history": "通知历史",
     "notification.clear": "清除",
     "notification.empty": "暂无通知",
+    "notification.generating": "{count} 个任务正在生成",
+    "notification.minimize": "最小化",
+    "notification.stopAll": "全部取消",
 
     // Common
     "common.save": "保存",
@@ -406,6 +409,9 @@ const dictionaries: Record<Locale, TranslationDict> = {
     "notification.history": "Notification History",
     "notification.clear": "Clear",
     "notification.empty": "No notifications",
+    "notification.generating": "{count} tasks generating",
+    "notification.minimize": "Minimize",
+    "notification.stopAll": "Stop All",
 
     "common.save": "Save",
     "common.cancel": "Cancel",
@@ -694,6 +700,9 @@ const dictionaries: Record<Locale, TranslationDict> = {
     "notification.history": "通知履歴",
     "notification.clear": "クリア",
     "notification.empty": "通知なし",
+    "notification.generating": "{count} 個のタスクを生成中",
+    "notification.minimize": "最小化",
+    "notification.stopAll": "すべて停止",
 
     "common.save": "保存",
     "common.cancel": "キャンセル",

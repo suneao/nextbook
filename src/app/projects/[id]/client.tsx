@@ -31,6 +31,7 @@ import {
   RotateCw,
   Check,
   Eye,
+  Minus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -64,6 +65,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { getModelConfig } from "@/lib/ai-service";
 import { useToast } from "@/components/toast-provider";
+import { registerTaskCallbacks, getTaskCallbacks } from "@/lib/task-callbacks";
 import {
   saveProject,
   loadAllProjects,
@@ -142,11 +144,38 @@ export default function ProjectDetailClient() {
   const router = useRouter();
   const projectId = params.id as string;
 
+  type GenTask = {
+    id: string;
+    title: string;
+    progress: string;
+    controller: AbortController;
+  };
+
   const [project, setProject] = useState<Project | null>(null);
+  const [activeTasks, setActiveTasks] = useState<GenTask[]>([]);
+  const [panelMinimized, setPanelMinimized] = useState(true);
+  const [panelLeaving, setPanelLeaving] = useState(false);
+  const panelTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const showPanel = useCallback(() => {
+    getTaskCallbacks().closeDropdown?.();
+    clearTimeout(panelTimerRef.current);
+    setPanelMinimized(false);
+    setPanelLeaving(false);
+  }, []);
+  const hidePanel = useCallback(() => {
+    if (panelMinimized) return;
+    setPanelLeaving(true);
+    clearTimeout(panelTimerRef.current);
+    panelTimerRef.current = setTimeout(() => {
+      setPanelMinimized(true);
+      setPanelLeaving(false);
+    }, 200);
+  }, [panelMinimized]);
   const [selectedSubChapterId, setSelectedSubChapterId] = useState<
     string | null
   >(null);
   const { toast } = useToast();
+  const { setActiveTaskCount, setActiveTaskList } = useToast();
   const [chatOpen, setChatOpen] = useState(false);
   const [filePreview, setFilePreview] = useState<{
     data: string;
@@ -157,7 +186,6 @@ export default function ProjectDetailClient() {
   const [sidebarWidth, setSidebarWidth] = useState(280);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
-  const [generatingToast, setGeneratingToast] = useState(false);
   const dragStart = useRef({ mx: 0, w: 280 });
   const [loaded, setLoaded] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -201,14 +229,74 @@ export default function ProjectDetailClient() {
   const toggleSidebar = () => {
     setSidebarWidth((w) => (w === 0 ? 280 : 0));
   };
+
+  // ── Task management ──────────────────────────────────────────
+  const addTask = useCallback((title: string, controller: AbortController) => {
+    const id =
+      "task-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6);
+    const task: GenTask = { id, title, progress: "准备中...", controller };
+    setActiveTasks((prev) => [...prev, task]);
+    setPanelMinimized(false);
+    return id;
+  }, []);
+
+  const updateTask = useCallback((id: string, progress: string) => {
+    setActiveTasks((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, progress } : t)),
+    );
+  }, []);
+
+  const removeTask = useCallback((id: string) => {
+    setActiveTasks((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  const cancelTask = useCallback((id: string) => {
+    setActiveTasks((prev) => {
+      const task = prev.find((t) => t.id === id);
+      if (task) task.controller.abort();
+      return prev.filter((t) => t.id !== id);
+    });
+  }, []);
+
+  const stopAllTasks = useCallback(() => {
+    setActiveTasks((prev) => {
+      for (const t of prev) t.controller.abort();
+      return [];
+    });
+  }, []);
+
+  const analyzing = activeTasks.length > 0;
+
+  // Sync task count and list to toast context
+  useEffect(() => {
+    setActiveTaskCount(activeTasks.length);
+    setActiveTaskList(
+      activeTasks.map(({ id, title, progress }) => ({ id, title, progress })),
+    );
+  }, [activeTasks, setActiveTaskCount, setActiveTaskList]);
+
+  // Register callbacks for NotificationBell
+  useEffect(() => {
+    registerTaskCallbacks({
+      onExpandTasks: showPanel,
+      onCancelTask: cancelTask,
+      onClosePanel: hidePanel,
+      closeDropdown: null,
+    });
+    return () =>
+      registerTaskCallbacks({
+        onExpandTasks: () => {},
+        onCancelTask: () => {},
+        onClosePanel: null,
+        closeDropdown: null,
+      });
+  }, [showPanel, cancelTask, hidePanel]);
+
   const [uploading, setUploading] = useState(false);
   const [regenScId, setRegenScId] = useState(null);
   const [regenInstructions, setRegenInstructions] = useState("");
   const [regenLoading, setRegenLoading] = useState(false);
-  const abortRef = useRef<AbortController | null>(null);
 
-  const [analyzing, setAnalyzing] = useState(false);
-  const [analysisStatus, setAnalysisStatus] = useState("");
   const [addingChapter, setAddingChapter] = useState(false);
   const [newChapterTitle, setNewChapterTitle] = useState("");
   const [addingSubToChapterId, setAddingSubToChapterId] = useState<
@@ -264,7 +352,6 @@ export default function ProjectDetailClient() {
         return;
       }
       setRegenLoading(true);
-      setGeneratingToast(true);
       try {
         const sc = project.chapters
           .flatMap((ch) => ch.subChapters)
@@ -334,7 +421,6 @@ export default function ProjectDetailClient() {
         );
       } finally {
         setRegenLoading(false);
-        setGeneratingToast(false);
       }
     },
     [project, updateProject, regenInstructions],
@@ -472,10 +558,7 @@ export default function ProjectDetailClient() {
     }
     const initialProject = project;
     const controller = new AbortController();
-    abortRef.current = controller;
-    setAnalyzing(true);
-    setGeneratingToast(true);
-    setAnalysisStatus(t("project.analyzingPdf"));
+    const taskId = addTask("AI分析", controller);
     try {
       const validTextbooks = initialProject.textbooks.filter(
         (tb) => tb.fileData,
@@ -510,20 +593,16 @@ export default function ProjectDetailClient() {
       );
       const totalSegments = Math.ceil(pdfText.length / SEGMENT_SIZE);
 
-      setAnalysisStatus(t("project.analyzingStructure"));
+      updateTask(taskId, t("project.analyzingStructure"));
 
       let chapters: Chapter[] = [];
 
       for (let seg = 0; seg < totalSegments; seg++) {
         if (controller.signal.aborted) return;
         if (totalSegments > 1) {
-          setAnalysisStatus(
-            t("project.analyzingStructure") +
-              " (" +
-              (seg + 1) +
-              "/" +
-              totalSegments +
-              ")",
+          updateTask(
+            taskId,
+            t("project.analyzingStructure") + ` (${seg + 1}/${totalSegments})`,
           );
         }
         const segStart = seg * SEGMENT_SIZE;
@@ -620,14 +699,31 @@ export default function ProjectDetailClient() {
 
       setProject({ ...initialProject, chapters });
 
-      let failedCount = 0;
+      // Flatten all sub-chapters for parallel processing
+      const flatTasks: { ci: number; si: number; sc: SubChapter }[] = [];
       for (let ci = 0; ci < chapters.length; ci++) {
         for (let si = 0; si < chapters[ci].subChapters.length; si++) {
-          if (controller.signal.aborted) {
-            setAnalysisStatus(t("project.stopped"));
-            return;
-          }
-          const sc = chapters[ci].subChapters[si];
+          flatTasks.push({ ci, si, sc: chapters[ci].subChapters[si] });
+        }
+      }
+      const totalTasks = flatTasks.length;
+
+      let failedCount = 0;
+      let completedCount = 0;
+      const updateProgress = () => {
+        const done = completedCount + failedCount;
+        updateTask(
+          taskId,
+          t("project.extracting") + ` (${done}/${totalTasks})`,
+        );
+      };
+      updateProgress();
+
+      // Process in parallel with concurrency limit of 3
+      const CONCURRENCY = 3;
+      const taskFns = flatTasks.map(({ ci, si, sc }) => async () => {
+        if (controller.signal.aborted) return;
+        try {
           const textStart = sc.textStart ?? Math.floor(pdfText.length * 0.05);
           const textEnd = sc.textEnd ?? pdfText.length;
           const sliceStart = Math.max(0, textStart - 500);
@@ -636,53 +732,50 @@ export default function ProjectDetailClient() {
             Math.max(textEnd + 500, textStart + 50000),
           );
           const chapterText = pdfText.slice(sliceStart, sliceEnd);
-          setAnalysisStatus(
-            t("project.extracting") +
-              " (" +
-              (ci + 1) +
-              "/" +
-              chapters.length +
-              t("project.chapterOf") +
-              ": " +
-              sc.title +
-              "...",
+          const knowledge = await extractKnowledgePoints(
+            chapterText,
+            sc.title,
+            chapterModelId,
+            controller.signal,
+            settings.language,
           );
-          try {
-            const knowledge = await extractKnowledgePoints(
-              chapterText,
-              sc.title,
-              chapterModelId,
-              controller.signal,
-              settings.language,
-            );
-            if (controller.signal.aborted) return;
-            const updatedSubChapter = {
-              ...sc,
-              knowledgePoints: knowledge.knowledgePoints,
-              examples: knowledge.examples,
-              exercises: knowledge.exercises,
-            };
-            const updatedSubChapters = [...chapters[ci].subChapters];
-            updatedSubChapters[si] = updatedSubChapter;
-            const updatedChapter = {
-              ...chapters[ci],
-              subChapters: updatedSubChapters,
-            };
-            const updatedChapters = [...chapters];
-            updatedChapters[ci] = updatedChapter;
-            chapters = updatedChapters;
-            setProject({ ...initialProject, chapters });
-          } catch (e) {
-            if (controller.signal.aborted) return;
-            failedCount++;
-            console.warn(
-              "[chapter-ai] Failed to extract knowledge for subchapter:",
-              sc.title,
-              e,
-            );
-          }
+          if (controller.signal.aborted) return;
+          const updatedSubChapter: SubChapter = {
+            ...sc,
+            knowledgePoints: knowledge.knowledgePoints,
+            examples: knowledge.examples,
+            exercises: knowledge.exercises,
+          };
+          const updatedSubChapters = [...chapters[ci].subChapters];
+          updatedSubChapters[si] = updatedSubChapter;
+          const updatedChapter = {
+            ...chapters[ci],
+            subChapters: updatedSubChapters,
+          };
+          const updatedChapters = [...chapters];
+          updatedChapters[ci] = updatedChapter;
+          chapters = updatedChapters;
+          completedCount++;
+          updateProgress();
+          setProject({ ...initialProject, chapters });
+        } catch (e) {
+          if (controller.signal.aborted) return;
+          failedCount++;
+          updateProgress();
+          console.warn(
+            "[chapter-ai] Failed to extract knowledge for subchapter:",
+            sc.title,
+            e,
+          );
         }
+      });
+
+      for (let i = 0; i < taskFns.length; i += CONCURRENCY) {
+        const batch = taskFns.slice(i, i + CONCURRENCY);
+        await Promise.all(batch.map((t) => t()));
+        if (controller.signal.aborted) break;
       }
+
       if (!controller.signal.aborted) {
         await saveProject({ ...initialProject, chapters });
         const totalSCs = chapters.reduce(
@@ -710,19 +803,180 @@ export default function ProjectDetailClient() {
       const msg = e instanceof Error ? e.message : String(e);
       toast("Analysis failed: " + msg, "error");
     } finally {
-      setAnalyzing(false);
-      setGeneratingToast(false);
-      if (!controller.signal.aborted) {
-        setAnalysisStatus("");
-      }
-      abortRef.current = null;
+      removeTask(taskId);
     }
   }, [project, updateProject]);
 
-  const handleStopAnalysis = useCallback(() => {
-    abortRef.current?.abort();
-    setGeneratingToast(false);
-  }, []);
+  // Re-analyze chapter structure only (no knowledge extraction)
+  const handleReAnalyze = useCallback(async () => {
+    if (!project || project.textbooks.length === 0) {
+      toast("Please upload a textbook PDF first", "warning");
+      return;
+    }
+    const settings = JSON.parse(
+      localStorage.getItem("nextbook-settings") || "{}",
+    );
+    const chapterModelId = settings.chapterModel || "gpt-4o";
+    const chapterModel = getModelConfig(chapterModelId);
+    if (!chapterModel?.apiKey) {
+      toast(
+        "Please configure the chapter analysis model API Key in Settings",
+        "warning",
+      );
+      return;
+    }
+    const initialProject = project;
+    const controller = new AbortController();
+    const taskId = addTask("重新分章", controller);
+    try {
+      const validTextbooks = initialProject.textbooks.filter(
+        (tb) => tb.fileData,
+      );
+      if (validTextbooks.length === 0) {
+        toast("PDF data not found", "error");
+        return;
+      }
+      const pdfTexts = await Promise.all(
+        validTextbooks.map((tb) => extractTextFromPDF(tb.fileData!)),
+      );
+      const pdfText = validTextbooks
+        .map((tb, i) => {
+          const label =
+            settings.language === "en-US"
+              ? `Textbook ${i + 1}: ${tb.name}`
+              : settings.language === "ja-JP"
+                ? `教科書${i + 1}：${tb.name}`
+                : `教材${i + 1}：${tb.name}`;
+          return `\n\n【${label}】\n\n${pdfTexts[i]}`;
+        })
+        .join("");
+      if (controller.signal.aborted) return;
+
+      const modelContext = getModelContextTokens(chapterModelId);
+      const maxInputTokens = Math.floor(modelContext * 0.5);
+      const MARKER_INTERVAL = 10000;
+      const SEGMENT_SIZE = Math.min(
+        maxInputTokens * 3,
+        1000000,
+        pdfText.length,
+      );
+      const totalSegments = Math.ceil(pdfText.length / SEGMENT_SIZE);
+
+      const chapters: Chapter[] = [];
+      for (let seg = 0; seg < totalSegments; seg++) {
+        if (controller.signal.aborted) return;
+        if (totalSegments > 1) {
+          updateTask(
+            taskId,
+            t("project.analyzingStructure") + ` (${seg + 1}/${totalSegments})`,
+          );
+        }
+        const segStart = seg * SEGMENT_SIZE;
+        const segText = pdfText.slice(
+          segStart,
+          Math.min(segStart + SEGMENT_SIZE, pdfText.length),
+        );
+        let segMarked = "";
+        for (let p = 0; p < segText.length; p += MARKER_INTERVAL) {
+          const posLabel = String(segStart + p).padStart(6, "0");
+          segMarked += "【POS_" + posLabel + "】";
+          segMarked += segText.slice(
+            p,
+            Math.min(p + MARKER_INTERVAL, segText.length),
+          );
+        }
+        const segChapters = await analyzeChapters(
+          segMarked,
+          chapterModelId,
+          controller.signal,
+          settings.language,
+          seg > 0 ? chapters.map((c) => c.title) : undefined,
+        );
+        if (controller.signal.aborted) return;
+        for (const ch of segChapters) {
+          const newFirstSC = ch.subChapters[0];
+          const dup = chapters.find((existing) => {
+            const existingLastSC =
+              existing.subChapters[existing.subChapters.length - 1];
+            const titleMatch =
+              existing.title === ch.title ||
+              (existingLastSC &&
+                newFirstSC &&
+                existingLastSC.title === newFirstSC.title);
+            if (!titleMatch) return false;
+            if (
+              existingLastSC?.posMarker != null &&
+              newFirstSC?.posMarker != null
+            ) {
+              const lastRaw = String(existingLastSC.posMarker);
+              const newRaw = String(newFirstSC.posMarker);
+              const lastMatch =
+                lastRaw.match(/POS_(\d+)/) || lastRaw.match(/(\d+)/);
+              const newMatch =
+                newRaw.match(/POS_(\d+)/) || newRaw.match(/(\d+)/);
+              const lastPos = parseInt(lastMatch?.[1] ?? "0", 10);
+              const newPos = parseInt(newMatch?.[1] ?? "0", 10);
+              if (Math.abs(newPos - lastPos) > SEGMENT_SIZE * 2) return false;
+            }
+            return true;
+          });
+          if (dup) {
+            const existingLast = dup.subChapters[dup.subChapters.length - 1];
+            const newFirst = ch.subChapters[0];
+            if (
+              existingLast &&
+              newFirst &&
+              existingLast.title === newFirst.title
+            ) {
+              ch.subChapters.shift();
+            }
+            for (const sc of ch.subChapters) dup.subChapters.push(sc);
+          } else {
+            ch.order = chapters.length;
+            chapters.push(ch);
+          }
+        }
+      }
+      if (controller.signal.aborted) return;
+
+      const allSCsFlat = chapters.flatMap((ch) => ch.subChapters);
+      for (const sc of allSCsFlat) {
+        if (sc.posMarker != null) {
+          const raw = String(sc.posMarker);
+          const m = raw.match(/POS_(\d+)/) || raw.match(/(\d+)/);
+          if (m) sc.textStart = parseInt(m[1], 10);
+        }
+        sc.textEnd = undefined;
+      }
+      for (let i = 0; i < allSCsFlat.length - 1; i++) {
+        if (allSCsFlat[i + 1].textStart != null) {
+          allSCsFlat[i].textEnd = allSCsFlat[i + 1].textStart!;
+        }
+      }
+      for (const sc of allSCsFlat) {
+        if (sc.textStart == null)
+          sc.textStart = Math.floor(pdfText.length * 0.05);
+        if (sc.textEnd == null)
+          sc.textEnd = Math.min(pdfText.length, (sc.textStart ?? 0) + 50000);
+      }
+
+      await saveProject({ ...initialProject, chapters });
+      setProject({ ...initialProject, chapters });
+      const totalSCs = chapters.reduce((a, ch) => a + ch.subChapters.length, 0);
+      toast(
+        `${chapters.length} chapters, ${totalSCs} sections detected`,
+        "success",
+      );
+    } catch (e) {
+      if (e instanceof Error && e.name === "AbortError") return;
+      toast(
+        "Analysis failed: " + (e instanceof Error ? e.message : String(e)),
+        "error",
+      );
+    } finally {
+      removeTask(taskId);
+    }
+  }, [project, updateProject]);
 
   const handleRegenerateChapter = useCallback(
     async (chapterId: string) => {
@@ -751,9 +1005,11 @@ export default function ProjectDetailClient() {
 
       const initialProject = project;
       const controller = new AbortController();
-      abortRef.current = controller;
+      const taskId = addTask(
+        "重新生成: " + (project.chapters[chapterIndex]?.title || ""),
+        controller,
+      );
       const language = settings.language || "zh-CN";
-      setAnalyzing(true);
       try {
         const pdfTexts = await Promise.all(
           validTextbooks.map((tb) => extractTextFromPDF(tb.fileData!)),
@@ -771,19 +1027,22 @@ export default function ProjectDetailClient() {
           .join("");
         if (controller.signal.aborted) return;
 
-        let chapters = initialProject.chapters;
+        let chapters = [...initialProject.chapters];
+        let completedCount = 0;
         let failedCount = 0;
         const subChapters = chapters[chapterIndex].subChapters;
+        const total = subChapters.length;
 
-        for (let si = 0; si < subChapters.length; si++) {
-          if (controller.signal.aborted) {
-            setAnalysisStatus(t("project.stopped"));
-            return;
-          }
-          const sc = subChapters[si];
-          setAnalysisStatus(
-            t("project.regenerateTitle") + ": " + sc.title + "...",
-          );
+        const updateProgress = () => {
+          const done = completedCount + failedCount;
+          updateTask(taskId, `(${done}/${total})`);
+        };
+        updateProgress();
+
+        // Process in parallel with concurrency limit of 3
+        const CONCURRENCY = 3;
+        const tasks = subChapters.map((sc, si) => async () => {
+          if (controller.signal.aborted) return;
           try {
             const textStart = sc.textStart ?? Math.floor(pdfText.length * 0.05);
             const textEnd = sc.textEnd ?? pdfText.length;
@@ -815,17 +1074,28 @@ export default function ProjectDetailClient() {
               subChapters: updatedSubChapters,
             };
             chapters = updatedChapters;
+            completedCount++;
+            updateProgress();
             setProject({ ...initialProject, chapters });
           } catch (e) {
             if (controller.signal.aborted) return;
             failedCount++;
+            updateProgress();
             console.warn(
               "[chapter-ai] Failed to regenerate subchapter:",
               sc.title,
               e,
             );
           }
+        });
+
+        // Run with concurrency limit
+        for (let i = 0; i < tasks.length; i += CONCURRENCY) {
+          const batch = tasks.slice(i, i + CONCURRENCY);
+          await Promise.all(batch.map((t) => t()));
+          if (controller.signal.aborted) break;
         }
+
         if (failedCount > 0) {
           toast(failedCount + " section(s) failed to regenerate.", "warning");
         }
@@ -840,11 +1110,7 @@ export default function ProjectDetailClient() {
           "error",
         );
       } finally {
-        setAnalyzing(false);
-        if (!controller.signal.aborted) {
-          setAnalysisStatus("");
-        }
-        abortRef.current = null;
+        removeTask(taskId);
       }
     },
     [project, updateProject],
@@ -1121,22 +1387,18 @@ export default function ProjectDetailClient() {
                       <Sparkles className="size-4" />
                     )}
                   </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-6 hover:bg-muted text-violet-500"
+                    onClick={handleReAnalyze}
+                    disabled={analyzing || project.chapters.length === 0}
+                    title="重新分章"
+                  >
+                    <RotateCw className="size-4" />
+                  </Button>
                 </div>
               </div>
-              {analyzing && analysisStatus && (
-                <div className="flex items-center gap-1 px-2 py-1">
-                  <p className="text-xs text-violet-500 flex-1">
-                    {analysisStatus}
-                  </p>
-                  <button
-                    onClick={handleStopAnalysis}
-                    className="size-5 flex items-center justify-center rounded hover:bg-red-100 dark:hover:bg-red-900/20 shrink-0"
-                    title={t("project.stopGenerate")}
-                  >
-                    <X className="size-3 text-red-500" />
-                  </button>
-                </div>
-              )}
               {addingChapter && (
                 <div className="flex gap-1 px-2 py-1">
                   <Input
@@ -1362,11 +1624,14 @@ export default function ProjectDetailClient() {
         )}
       </div>
 
-      {generatingToast && (
-        <GeneratingToast
-          message={t("project.generating")}
-          hint={t("project.generatingHint")}
-          onClose={() => setGeneratingToast(false)}
+      {activeTasks.length > 0 && (
+        <GenerationPanel
+          tasks={activeTasks}
+          minimized={panelMinimized}
+          leaving={panelLeaving}
+          onToggle={hidePanel}
+          onCancel={cancelTask}
+          onStopAll={stopAllTasks}
         />
       )}
 
@@ -1591,7 +1856,7 @@ function ChapterTreeNode({
                 className={cn(
                   "flex w-full items-center gap-1.5 rounded-md px-2 py-2 text-[13px] transition-all text-left group/sc",
                   selectedSubChapterId === sc.id
-                    ? "bg-primary/10 text-primary font-medium shadow-sm border border-primary/20 backdrop-blur-md"
+                    ? "backdrop-blur-md text-primary font-medium shadow-sm"
                     : "text-muted-foreground hover:bg-muted/30 hover:backdrop-blur-md hover:text-foreground",
                 )}
                 onClick={() => onSelect(sc.id)}
@@ -2309,36 +2574,78 @@ function StudyUnitViewer({
   );
 }
 
-function GeneratingToast({
-  message,
-  hint,
-  onClose,
+function GenerationPanel({
+  tasks,
+  minimized,
+  leaving,
+  onToggle,
+  onCancel,
+  onStopAll,
 }: {
-  message: string;
-  hint: string;
-  onClose: () => void;
+  tasks: { id: string; title: string; progress: string }[];
+  minimized: boolean;
+  leaving: boolean;
+  onToggle: () => void;
+  onCancel: (id: string) => void;
+  onStopAll: () => void;
 }) {
-  useEffect(() => {
-    const t = setTimeout(onClose, 5000);
-    return () => clearTimeout(t);
-  }, [onClose]);
+  const { t: pt } = useLocale();
+  if (minimized && !leaving) return null;
+
   return (
-    <div className="fixed top-16 right-6 z-50 motion-preset-slide-down motion-duration-300">
-      <div className="flex items-center gap-3 bg-amber-500 text-white px-5 py-3 rounded-xl shadow-2xl">
-        <span className="relative flex size-3">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
-          <span className="relative inline-flex rounded-full size-3 bg-white"></span>
-        </span>
-        <div>
-          <p className="text-sm font-semibold">{message}</p>
-          <p className="text-xs text-amber-100">{hint}</p>
+    <div
+      className={`fixed top-16 right-6 z-[60] animate-in fade-in slide-in-from-right-4 duration-200 ${
+        leaving
+          ? "animate-out fade-out slide-out-to-right-4 fill-mode-forwards"
+          : ""
+      }`}
+    >
+      <div className="bg-card border rounded-xl shadow-2xl overflow-hidden w-72 motion-preset-slide-down motion-duration-200">
+        <div className="flex items-center justify-between px-4 py-2 border-b bg-violet-500 text-white">
+          <span className="text-sm font-medium">
+            {pt("notification.generating").replace(
+              "{count}",
+              String(tasks.length),
+            )}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={onStopAll}
+              className="size-6 flex items-center justify-center rounded hover:bg-white/20 transition-colors"
+              title={pt("notification.stopAll")}
+            >
+              <X className="size-3.5" />
+            </button>
+            <button
+              onClick={onToggle}
+              className="size-6 flex items-center justify-center rounded hover:bg-white/20 transition-colors"
+              title={pt("notification.minimize")}
+            >
+              <Minus className="size-4" />
+            </button>
+          </div>
         </div>
-        <button
-          onClick={onClose}
-          className="ml-2 shrink-0 opacity-70 hover:opacity-100"
-        >
-          <X className="size-3.5" />
-        </button>
+        <div className="max-h-64 overflow-y-auto">
+          {tasks.map((task) => (
+            <div
+              key={task.id}
+              className="flex items-center gap-3 px-4 py-2.5 border-b last:border-0 hover:bg-muted/30"
+            >
+              <Loader2 className="size-4 animate-spin text-violet-500 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium truncate">{task.title}</p>
+                <p className="text-xs text-muted-foreground">{task.progress}</p>
+              </div>
+              <button
+                onClick={() => onCancel(task.id)}
+                className="size-5 flex items-center justify-center rounded hover:bg-red-100 dark:hover:bg-red-900/20 shrink-0 transition-colors"
+                title={pt("common.cancel")}
+              >
+                <X className="size-3 text-red-500" />
+              </button>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
