@@ -914,25 +914,24 @@ export default function ProjectDetailClient() {
         );
         if (controller.signal.aborted) return;
 
-        setProject((prev) => {
-          if (!prev) return prev;
-          return {
-            ...prev,
-            chapters: prev.chapters.map((ch) => ({
-              ...ch,
-              subChapters: ch.subChapters.map((s) =>
-                s.id === scId
-                  ? {
-                      ...s,
-                      knowledgePoints: knowledge.knowledgePoints,
-                      examples: knowledge.examples,
-                      exercises: knowledge.exercises,
-                    }
-                  : s,
-              ),
-            })),
-          };
-        });
+        const updated = {
+          ...project,
+          chapters: project.chapters.map((ch) => ({
+            ...ch,
+            subChapters: ch.subChapters.map((s) =>
+              s.id === scId
+                ? {
+                    ...s,
+                    knowledgePoints: knowledge.knowledgePoints,
+                    examples: knowledge.examples,
+                    exercises: knowledge.exercises,
+                  }
+                : s,
+            ),
+          })),
+        };
+        setProject(updated);
+        await saveProject(updated);
         updateTask(taskId, "完成");
       } catch (e) {
         if (e instanceof Error && e.name === "AbortError") return;
