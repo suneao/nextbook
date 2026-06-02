@@ -107,6 +107,10 @@ export function Markdown({
 
   const rendered = useMemo(() => {
     let text = content;
+    // Convert literal \n and \r to actual newlines (outside LaTeX commands)
+    text = text
+      .replace(/\\n(?![a-zA-Z])/g, "\n")
+      .replace(/\\r(?![a-zA-Z])/g, "\r");
     // Convert LaTeX delimiters: \(...\) → $...$, \[...\] → $$...$$
     text = text.replace(/\\\(/g, "$").replace(/\\\)/g, "$");
     text = text.replace(/\\\[/g, "$$").replace(/\\\]/g, "$$");
