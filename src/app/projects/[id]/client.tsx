@@ -32,6 +32,7 @@ import {
   Check,
   Eye,
   Minus,
+  Download,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -159,6 +160,11 @@ export default function ProjectDetailClient() {
   const [panelMinimized, setPanelMinimized] = useState(true);
   const [panelLeaving, setPanelLeaving] = useState(false);
   const panelTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const panelMinimizedRef = useRef(true);
+  useEffect(() => {
+    panelMinimizedRef.current = panelMinimized;
+  }, [panelMinimized]);
+
   const showPanel = useCallback(() => {
     getTaskCallbacks().closeDropdown?.();
     clearTimeout(panelTimerRef.current);
@@ -166,14 +172,14 @@ export default function ProjectDetailClient() {
     setPanelLeaving(false);
   }, []);
   const hidePanel = useCallback(() => {
-    if (panelMinimized) return;
+    if (panelMinimizedRef.current) return;
     setPanelLeaving(true);
     clearTimeout(panelTimerRef.current);
     panelTimerRef.current = setTimeout(() => {
       setPanelMinimized(true);
       setPanelLeaving(false);
     }, 200);
-  }, [panelMinimized]);
+  }, []);
   const [selectedSubChapterId, setSelectedSubChapterId] = useState<
     string | null
   >(null);
@@ -842,7 +848,99 @@ export default function ProjectDetailClient() {
     }
   }, [project, updateProject]);
 
-  // Re-analyze chapter structure only (no knowledge extraction)
+  // Regenerate a single subchapter
+  const handleRegenerateSingleSubChapter = useCallback(
+    async (scId: string) => {
+      if (!project || project.textbooks.length === 0) return;
+      const settings = (() => {
+        try {
+          return JSON.parse(localStorage.getItem("nextbook-settings") || "{}");
+        } catch {
+          return {};
+        }
+      })();
+      const modelId = settings.chapterModel || "gpt-4o";
+      const model = getModelConfig(modelId);
+      if (!model?.apiKey) return;
+      const sc = project.chapters
+        .flatMap((ch) => ch.subChapters)
+        .find((s) => s.id === scId);
+      if (!sc) return;
+
+      const validTextbooks = project.textbooks.filter((tb) => tb.fileData);
+      if (validTextbooks.length === 0) return;
+
+      const controller = new AbortController();
+      const taskId = addTask(sc.title, controller);
+      try {
+        const pdfTexts = await Promise.all(
+          validTextbooks.map((tb) => extractTextFromPDF(tb.fileData!)),
+        );
+        const fullText = validTextbooks
+          .map((tb, i) => `\n\n【${tb.name}】\n\n${pdfTexts[i]}`)
+          .join("");
+        if (controller.signal.aborted) return;
+
+        const PAD = 2000;
+        let pdfText = fullText;
+        if (sc.textStart != null) {
+          const start = Math.max(0, sc.textStart - PAD);
+          const end =
+            sc.textEnd != null && sc.textEnd > sc.textStart
+              ? Math.min(fullText.length, sc.textEnd + PAD)
+              : Math.min(fullText.length, sc.textStart + 50000);
+          pdfText = fullText.slice(start, end);
+        } else {
+          const skip = Math.floor(fullText.length * 0.05);
+          pdfText = fullText.slice(
+            skip,
+            Math.min(fullText.length, skip + 50000),
+          );
+        }
+
+        updateTask(taskId, "生成中...");
+        const knowledge = await extractKnowledgePoints(
+          pdfText,
+          sc.title,
+          modelId,
+          controller.signal,
+          settings.language,
+        );
+        if (controller.signal.aborted) return;
+
+        setProject((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            chapters: prev.chapters.map((ch) => ({
+              ...ch,
+              subChapters: ch.subChapters.map((s) =>
+                s.id === scId
+                  ? {
+                      ...s,
+                      knowledgePoints: knowledge.knowledgePoints,
+                      examples: knowledge.examples,
+                      exercises: knowledge.exercises,
+                    }
+                  : s,
+              ),
+            })),
+          };
+        });
+        updateTask(taskId, "完成");
+      } catch (e) {
+        if (e instanceof Error && e.name === "AbortError") return;
+        toast(
+          "生成失败: " + (e instanceof Error ? e.message : String(e)),
+          "error",
+        );
+      } finally {
+        removeTask(taskId);
+      }
+    },
+    [project, updateProject, addTask, updateTask, removeTask],
+  );
+
   const handleReAnalyze = useCallback(async () => {
     if (!project || project.textbooks.length === 0) {
       toast("Please upload a textbook PDF first", "warning");
@@ -1507,6 +1605,7 @@ export default function ProjectDetailClient() {
                     onDeleteChapter={handleDeleteChapter}
                     onRegenerateChapter={handleRegenerateChapter}
                     onDeleteSubChapter={handleDeleteSubChapter}
+                    onRegenerateSubChapter={handleRegenerateSingleSubChapter}
                   />
                 ))}
               </div>
@@ -1786,6 +1885,22 @@ function MaterialSection({
                 variant="ghost"
                 size="icon"
                 className="size-5 opacity-0 group-hover:opacity-100 shrink-0"
+                onClick={() => {
+                  const fd = (f as Textbook).fileData;
+                  if (!fd) return;
+                  const a = document.createElement("a");
+                  a.href = fd;
+                  a.download = f.name;
+                  a.click();
+                }}
+                title={mt("material.download") || "下载"}
+              >
+                <Download className="size-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-5 opacity-0 group-hover:opacity-100 shrink-0"
                 onClick={() => onRemove(f.id)}
               >
                 <Trash2 className="size-3.5 text-destructive" />
@@ -1816,6 +1931,7 @@ function ChapterTreeNode({
   onDeleteChapter,
   onRegenerateChapter,
   onDeleteSubChapter,
+  onRegenerateSubChapter,
 }: {
   chapter: Chapter;
   selectedSubChapterId: string | null;
@@ -1829,6 +1945,7 @@ function ChapterTreeNode({
   onDeleteChapter: (chId: string) => void;
   onRegenerateChapter?: (chId: string) => void;
   onDeleteSubChapter?: (scId: string) => void;
+  onRegenerateSubChapter?: (scId: string) => void;
 }) {
   const completedCount = chapter.subChapters.filter(
     (sc) => sc.completed,
@@ -1934,6 +2051,18 @@ function ChapterTreeNode({
                   <Circle className="size-4 shrink-0 text-muted-foreground/40" />
                 )}
                 <span className="truncate flex-1">{sc.title}</span>
+                {onRegenerateSubChapter && (
+                  <span
+                    className="size-5 flex items-center justify-center rounded hover:bg-muted shrink-0 opacity-0 group-hover/sc:opacity-100 max-md:opacity-100 transition-opacity"
+                    title={ct("project.regenerateTitle") || "重新生成"}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRegenerateSubChapter(sc.id);
+                    }}
+                  >
+                    <RotateCw className="size-3" />
+                  </span>
+                )}
                 {onDeleteSubChapter && (
                   <span
                     className="size-5 flex items-center justify-center rounded hover:bg-red-100 dark:hover:bg-red-900/20 shrink-0 opacity-0 group-hover/sc:opacity-100 max-md:opacity-100 transition-opacity ml-1"
@@ -2667,7 +2796,7 @@ function GenerationPanel({
           : ""
       }`}
     >
-      <div className="bg-card border rounded-xl shadow-2xl overflow-hidden w-72 motion-preset-slide-down motion-duration-200">
+      <div className="bg-white/90 dark:bg-zinc-900/90 backdrop-blur-xl border rounded-xl shadow-lg ring-1 ring-black/5 dark:ring-white/10 overflow-hidden w-72">
         <div className="flex items-center justify-between px-4 py-2 border-b bg-violet-500 text-white">
           <span className="text-sm font-medium">
             {pt("notification.generating").replace(

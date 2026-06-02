@@ -19,6 +19,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { getTaskCallbacks, registerTaskCallbacks } from "@/lib/task-callbacks";
+import { createPortal } from "react-dom";
 import { useLocale } from "@/lib/i18n";
 
 type ToastType = "error" | "success" | "warning" | "info";
@@ -243,21 +244,21 @@ export function NotificationBell() {
       </button>
       {(open || leaving) && (history.length > 0 || activeTaskCount > 0) ? (
         <div
-          className={`absolute right-0 top-16 w-80 bg-card border rounded-xl shadow-2xl z-50 max-h-80 overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 duration-200 ${
+          className={`absolute right-0 top-16 w-80 bg-white dark:bg-zinc-900 border rounded-xl shadow-2xl ring-1 ring-black/5 dark:ring-white/10 z-50 max-h-80 overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 duration-200 ${
             leaving
               ? "animate-out fade-out slide-out-to-top-2 fill-mode-forwards"
               : ""
           }`}
         >
           {activeTaskCount > 0 && (
-            <div className="px-4 py-2.5 border-b bg-violet-50 dark:bg-violet-950/30">
-              <p className="text-xs font-semibold text-violet-600 dark:text-violet-400 mb-1">
+            <div className="border-b bg-violet-50/80 dark:bg-violet-950/30 backdrop-blur-md">
+              <p className="px-4 pt-2.5 text-xs font-semibold text-violet-600 dark:text-violet-400">
                 {t("notification.generating").replace(
                   "{count}",
                   String(activeTaskCount),
                 )}
               </p>
-              <div className="space-y-1">
+              <div className="px-2 py-1.5 space-y-0.5">
                 {activeTaskList.map((task) => (
                   <button
                     key={task.id}
@@ -265,18 +266,24 @@ export function NotificationBell() {
                       close();
                       taskCallbacks?.onExpandTasks();
                     }}
-                    className="flex items-center gap-2 text-xs text-muted-foreground w-full text-left hover:bg-accent hover:text-accent-foreground rounded px-2 py-1 -mx-2 transition-colors"
+                    className="flex items-center gap-2 w-full text-left rounded-md px-2 py-1.5 hover:bg-muted/30 hover:backdrop-blur-md transition-colors"
                   >
-                    <Loader2 className="size-3 animate-spin text-violet-500 shrink-0" />
-                    <span className="truncate flex-1">{task.title}</span>
-                    <span className="shrink-0">{task.progress}</span>
+                    <Loader2 className="size-3.5 animate-spin text-violet-500 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate">
+                        {task.title}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {task.progress}
+                      </p>
+                    </div>
                     {taskCallbacks && (
                       <span
                         onClick={(e) => {
                           e.stopPropagation();
                           taskCallbacks.onCancelTask(task.id);
                         }}
-                        className="size-4 flex items-center justify-center rounded hover:bg-red-100 dark:hover:bg-red-900/20 shrink-0 ml-1"
+                        className="size-5 flex items-center justify-center rounded hover:bg-red-100 dark:hover:bg-red-900/20 shrink-0 transition-colors"
                         title="取消"
                       >
                         <X className="size-3 text-red-500" />
@@ -329,7 +336,7 @@ export function NotificationBell() {
       ) : (
         (open || leaving) && (
           <div
-            className={`absolute right-0 top-16 w-80 bg-card border rounded-xl shadow-2xl z-50 p-6 text-center animate-in fade-in slide-in-from-top-2 duration-200 ${
+            className={`absolute right-0 top-16 w-80 bg-white dark:bg-zinc-900 border rounded-xl shadow-2xl ring-1 ring-black/5 dark:ring-white/10 z-50 p-6 text-center animate-in fade-in slide-in-from-top-2 duration-200 ${
               leaving
                 ? "animate-out fade-out slide-out-to-top-2 fill-mode-forwards"
                 : ""

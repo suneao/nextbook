@@ -12,7 +12,7 @@ import {
   Paperclip,
   File,
 } from "lucide-react";
-import { chatCompletion } from "@/lib/ai-service";
+import { chatCompletionStream } from "@/lib/ai-stream";
 import { useLocale } from "@/lib/i18n";
 import { Markdown } from "@/components/markdown";
 import { extractTextFromPDF } from "@/lib/pdf-service";
@@ -128,7 +128,7 @@ export function AIChatPanel({
           ? `あなたは学習アシスタントです。現在の章: ${chapterTitle || "不明"}。日本語で回答し、Markdown形式とLaTeX数式（行内$...$、ブロック$$...$$）を使用してください。ファイルがアップロードされた場合、その内容に基づいて回答してください。`
           : `你是一个学习助手。当前章节：${chapterTitle || "未知"}。请使用Markdown格式回复，数学公式用LaTeX（行内$...$，块级$$...$$）。如果用户上传了文件内容，请基于文件内容回答问题。`;
 
-      const reply = await chatCompletion(
+      const stream = chatCompletionStream(
         settings.qaModel,
         [
           { role: "system", content: systemPrompt },
@@ -140,7 +140,21 @@ export function AIChatPanel({
         ],
         { temperature: 0.7 },
       );
-      setMessages((p) => [...p, { role: "assistant", content: reply }]);
+
+      // Add empty assistant message and stream into it
+      setMessages((p) => [...p, { role: "assistant", content: "" }]);
+      for await (const chunk of stream) {
+        setMessages((p) => {
+          const last = p[p.length - 1];
+          if (last?.role !== "assistant") return p;
+          const updated = [...p];
+          updated[updated.length - 1] = {
+            ...last,
+            content: last.content + chunk,
+          };
+          return updated;
+        });
+      }
     } catch (e) {
       setMessages((p) => [
         ...p,
