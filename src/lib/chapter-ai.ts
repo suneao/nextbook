@@ -198,135 +198,159 @@ export async function extractKnowledgePoints(
   > = {
     "zh-CN": {
       system:
-        "你是一个教育内容分析专家。请从提供的教材文本中提取知识点、例题和习题。\n\n【语言强制要求】你必须100%使用简体中文输出所有内容（知识点标题、知识点内容、题目、解答等）。严禁输出任何英文、日文或其他语言的内容。在JSON中，LaTeX反斜杠命令必须双重转义（如 \\frac 而非 \frac），否则JSON解析会失败。",
+        "你是一名优秀的教师和教育内容创作专家。请从提供的教材文本中提取知识点、例题和习题。\\n\\n【语言强制要求】你必须100%使用简体中文输出所有内容（知识点标题、知识点内容、题目、解答等）。严禁输出任何英文、日文或其他语言的内容。在JSON中，LaTeX反斜杠命令必须双重转义（如 \\\\frac 而非 \\frac），否则JSON解析会失败。",
       userPrefix: '请详细分析以下教材文本中关于"',
       userSuffix:
-        '"的内容，提取详细的学习材料。\n\n' +
+        '"的内容，提取详细的学习材料。\\n\\n' +
         "【语言强制要求 - 最重要】\n" +
-        "- 所有输出内容必须使用简体中文：知识点标题、知识点内容、例题的question和solution、习题的question和solution\n" +
+        "- 所有输出内容必须使用简体中文\n" +
         "- 严禁在任何字段中输出英文、日文或其他语言\n" +
-        "- 如果原文是其他语言，你必须将它们翻译为专业准确的中文\n\n" +
-        "【知识点要求 - 务必详细】\n" +
-        "- 每个知识点必须包含300字以上的详细说明，内容要充实、有深度\n" +
-        "- 充分利用Markdown排版：用**加粗**标出核心概念，用*斜体*标出注意事项，用==荧光高亮==标出关键公式\n" +
-        "- 段落之间使用空行分隔（连续两个\\n），让内容层次分明\n" +
-        "- 善用无序列表（ - 开头）和有序列表（1. 开头）来组织要点，但不要使用Markdown标题（# ## ###）\n" +
-        "- 每个知识点结构：**概念定义**（用明确的语言定义）、**核心性质**（列出并解释关键性质）、**推导过程**（如有，分步骤展示）、**应用场景**（至少2个具体例子）、**记忆技巧**（帮助记忆的口诀或方法）\n" +
-        "- 所有数学公式必须使用LaTeX格式：行内公式用 $...$ 包裹，重要公式独占一行用 $$...$$ 包裹\n" +
-        "- 【禁止】公式内部绝对不能换行！所有数学表达式必须写在同一行中\n" +
-        "- 公式示例：分数 \\frac{a}{b}、根号 \\sqrt{x}、积分 \\int_a^b f(x)dx、极限 \\lim_{x\\to 0}、求和 \\sum_{i=1}^n\n" +
-        "- 知识点数量：3-6个，确保覆盖完整\n\n" +
-        "【例题要求 - 务必完整】\n" +
-        "- 每题必须包含完整的解答步骤，使用 **第1步：**、**第2步：** 分段落标注\n" +
-        "- 每步都要说明依据的定理或性质，如：**分析思路：**、**推导过程：**、**代入计算：**\n" +
-        "- 解答最后用 **答案：** 给出最终结论，答案独占一个段落\n" +
-        "- 所有数学公式使用 $...$ 或 $$...$$ 包裹\n" +
-        "- 每题需包含 relatedKnowledgePoints 数组，列出本题涉及的知识点名称（与上文提取的知识点标题对应）\n" +
-        "- 例题数量：2-4道，从易到难\n\n" +
+        "- 如果原文是其他语言，必须翻译为专业准确的中文\n\n" +
+        "【知识点生成指南 - 你要像一位耐心的教师一样讲解】\n" +
+        "- 每个知识点的 content 字段必须达到400字以上，要像一位老师那样娓娓道来\n" +
+        "- ==用通俗易懂的语言解释复杂概念==，先讲「是什么」，再讲「为什么重要」，最后讲「怎么用」\n" +
+        "- 每个知识点严格按以下段落结构组织（段落间用空行分隔）：\n" +
+        "  1. **概念定义**：用一句话精准定义，然后用通俗的语言展开解释\n" +
+        "  2. **核心性质**：用无序列表（ - 开头）逐条列出并解释关键性质，每条附带简短说明\n" +
+        "  3. **推导/证明**（如适用）：分步骤展示推导过程\n" +
+        "  4. **应用举例**：给出至少2个具体的应用场景，每个场景说明「什么问题、如何使用、得到什么」\n" +
+        "  5. **记忆技巧**：提供口诀、类比或图形化方法来帮助记忆\n" +
+        "- 充分利用Markdown让内容易读：**加粗**核心术语，*斜体*注意事项，==高亮==关键公式\n" +
+        "- 善用列表（ - 和 1. ）组织多条信息，但禁止使用 # ## ### 标题\n" +
+        "- 所有数学公式用LaTeX：行内 $...$，重要公式独占一行 $$...$$\n" +
+        "- 【禁止】公式内部绝对不能换行！\n" +
+        "- 知识点数量：根据教材内容完整覆盖，不要遗漏任何重要知识点\n\n" +
+        "【例题生成指南】\n" +
+        "- 由易到难排列，第一题为基础题，最后一题为综合题\n" +
+        "- 解答格式：\n" +
+        "  **第1步：分析题意** - 明确已知条件和求解目标\n" +
+        "  **第2步：选择方法** - 说明为什么用这个定理/公式\n" +
+        "  **第3步：代入计算** - 逐步演算，每个等号后单独一行\n" +
+        "  **第N步：验证结果** - 检查答案的合理性\n" +
+        "  **答案：** 最终结果独占段落\n" +
+        "- 每个等号、每个公式都用 $...$ 包裹\n" +
+        "- 每道题必须包含 relatedKnowledgePoints 数组\n" +
+        "- 例题数量：2-4道\n\n" +
         "【课后习题要求】\n" +
-        "- 每题必须包含详细解答，结构与例题相同（分步骤、有答案）\n" +
+        "- 结构与例题完全一致（分步骤、有答案）\n" +
         "- 每题需包含 relatedKnowledgePoints 数组\n" +
         "- 习题数量：1-3道\n\n" +
         "返回格式（严格JSON，不要markdown代码块）：\n" +
         "{\n" +
         '  "knowledgePoints": [\n' +
-        '    { "title": "知识点标题", "content": "详细说明（公式用$...$格式）" }\n' +
+        '    { "title": "知识点标题", "content": "详细说明，请参考上述指南" }\n' +
         "  ],\n" +
         '  "examples": [\n' +
-        '    { "question": "题目（公式用$...$格式）", "solution": "解答（分步骤，公式用$...$格式）", "relatedKnowledgePoints": ["知识点1", "知识点2"] }\n' +
+        '    { "question": "题目", "solution": "分步骤解答", "relatedKnowledgePoints": ["知识点1", "知识点2"] }\n' +
         "  ],\n" +
         '  "exercises": [\n' +
-        '    { "question": "题目内容", "solution": "解答", "relatedKnowledgePoints": ["知识点1"] }\n' +
+        '    { "question": "题目", "solution": "分步骤解答", "relatedKnowledgePoints": ["知识点1"] }\n' +
         "  ]\n" +
         "}\n\n" +
         "教材文本：\n",
     },
     "en-US": {
       system:
-        "You are an educational content analysis expert. Extract knowledge points, examples, and exercises from the provided textbook text.\n\n[LANGUAGE REQUIREMENT] You MUST output ALL content in English — knowledge point titles, knowledge point content, example questions and solutions, exercise questions and solutions. Absolutely no Chinese, Japanese, or any other language. In JSON, LaTeX backslash commands MUST be double-escaped (e.g. \\frac not \frac), otherwise JSON parsing will fail.",
+        "You are an excellent teacher and educational content creation expert. Extract knowledge points, examples, and exercises from the provided textbook text.\\n\\n[LANGUAGE REQUIREMENT] You MUST output ALL content in English — knowledge point titles, knowledge point content, example questions and solutions, exercise questions and solutions. Absolutely no Chinese, Japanese, or any other language. In JSON, LaTeX backslash commands MUST be double-escaped (e.g. \\\\frac not \\frac), otherwise JSON parsing will fail.",
       userPrefix: 'Please analyze the following textbook text about "',
       userSuffix:
         '" in detail and extract comprehensive learning materials.\n\n' +
         "[LANGUAGE REQUIREMENT - MOST IMPORTANT]\n" +
-        "- ALL output content MUST be in English: knowledge point titles, knowledge point content, example questions/solutions, exercise questions/solutions\n" +
+        "- ALL output content MUST be in English\n" +
         "- Do NOT output Chinese, Japanese, or any other language in ANY field\n" +
         "- If the source text is in another language, you MUST translate everything to professional, accurate English\n\n" +
-        "【Knowledge Points - Must be detailed】\n" +
-        "- Each knowledge point must include 300+ words of detailed explanation in English with rich content\n" +
-        "- Use Markdown formatting extensively: **bold** for core concepts, *italic* for notes/warnings, ==highlight== for important formulas\n" +
-        "- Separate paragraphs with blank lines (double \\n) to create clear visual hierarchy\n" +
-        "- Use bullet lists ( - item) and numbered lists (1. item) to organize key points, but avoid Markdown headings (# ## ###)\n" +
-        "- Structure each knowledge point: **Definition** (clear language), **Key Properties** (list and explain), **Derivation** (if applicable, step-by-step), **Applications** (at least 2 concrete examples), **Memory Tips** (mnemonics or tricks)\n" +
-        "- ALL math formulas MUST use LaTeX: inline formulas in $...$, important standalone formulas in $$...$$\n" +
-        "- [FORBIDDEN] Never put line breaks inside math formulas! All math expressions must be on a single line\n" +
-        "- Formula examples: fractions \\frac{a}{b}, roots \\sqrt{x}, integrals \\int_a^b f(x)dx, limits \\lim_{x\\to 0}, sums \\sum_{i=1}^n\n" +
-        "- Number of knowledge points: 3-6, ensure complete coverage\n\n" +
-        "【Examples - Must be complete】\n" +
-        "- Each example must include complete step-by-step solutions using **Step 1:**, **Step 2:** as separate paragraphs\n" +
-        "- Each step must explain the reasoning: **Analysis:**, **Derivation:**, **Calculation:**\n" +
-        "- End with **Answer:** giving the final result as a separate paragraph\n" +
-        "- All math formulas in $...$ or $$...$$\n" +
-        "- Each example must include a relatedKnowledgePoints array\n" +
-        "- Number of examples: 2-4, from easy to hard\n\n" +
+        "【Knowledge Point Guidelines — Explain like a patient teacher】\n" +
+        "- Each knowledge point content MUST be 400+ words, explaining thoroughly like a teacher\n" +
+        "- ==Explain complex concepts in simple language==: first 'what it is', then 'why it matters', then 'how to use it'\n" +
+        "- Strict paragraph structure (separate with blank lines):\n" +
+        "  1. **Definition**: One precise sentence, then expand in plain language\n" +
+        "  2. **Key Properties**: Use bullet lists ( - ) to list and explain each property with a brief note\n" +
+        "  3. **Derivation/Proof** (if applicable): Step-by-step derivation\n" +
+        "  4. **Applications**: At least 2 concrete scenarios, each describing 'what problem, how to use, what result'\n" +
+        "  5. **Memory Tips**: Mnemonics, analogies, or visual methods to help remember\n" +
+        "- Use Markdown to improve readability: **bold** for key terms, *italic* for notes, ==highlight== for critical formulas\n" +
+        "- Use lists ( - and 1. ) to organize information, but NO # ## ### headings\n" +
+        "- ALL math formulas in LaTeX: inline $...$, important formulas standalone $$...$$\n" +
+        "- [FORBIDDEN] Never put line breaks inside math formulas!\n" +
+        "- Number of knowledge points: cover ALL important concepts from the text, do not omit any\n\n" +
+        "【Example Guidelines】\n" +
+        "- Arrange from easy to hard: first problem basic, last problem comprehensive\n" +
+        "- Solution format:\n" +
+        "  **Step 1: Analyze** - Identify given info and what to find\n" +
+        "  **Step 2: Choose Method** - Explain why this theorem/formula\n" +
+        "  **Step 3: Calculate** - Step-by-step computation with each equal sign on its own line\n" +
+        "  **Step N: Verify** - Check reasonableness of the answer\n" +
+        "  **Answer:** Final result as a separate paragraph\n" +
+        "- Every equal sign and formula wrapped in $...$\n" +
+        "- Each example MUST include a relatedKnowledgePoints array\n" +
+        "- Number of examples: 2-4\n\n" +
         "【Exercises】\n" +
-        "- Each exercise must include a detailed solution, same structure as examples (step-by-step with answer)\n" +
-        "- Each exercise must include a relatedKnowledgePoints array\n" +
+        "- Same structure as examples (step-by-step with answer)\n" +
+        "- Each MUST include a relatedKnowledgePoints array\n" +
         "- Number of exercises: 1-3\n\n" +
         "Output format (strict JSON, no markdown code block):\n" +
         "{\n" +
         '  "knowledgePoints": [\n' +
-        '    { "title": "Knowledge point title", "content": "Detailed explanation (use $...$ for formulas)" }\n' +
+        '    { "title": "Knowledge point title", "content": "Detailed explanation per the guidelines above" }\n' +
         "  ],\n" +
         '  "examples": [\n' +
-        '    { "question": "Problem (use $...$ for formulas)", "solution": "Solution (step-by-step, use $...$)", "relatedKnowledgePoints": ["KP1", "KP2"] }\n' +
+        '    { "question": "Problem", "solution": "Step-by-step solution", "relatedKnowledgePoints": ["KP1", "KP2"] }\n' +
         "  ],\n" +
         '  "exercises": [\n' +
-        '    { "question": "Problem", "solution": "Solution", "relatedKnowledgePoints": ["KP1"] }\n' +
+        '    { "question": "Problem", "solution": "Step-by-step solution", "relatedKnowledgePoints": ["KP1"] }\n' +
         "  ]\n" +
         "}\n\n" +
         "Textbook text:\n",
     },
     "ja-JP": {
       system:
-        "あなたは教育コンテンツ分析の専門家です。提供された教材テキストから知識ポイント、例題、練習問題を抽出してください。\n\n【言語強制要件】すべての内容を必ず日本語で出力してください（知識ポイントのタイトルと内容、例題の問題と解答、練習問題の問題と解答）。英語、中国語、その他の言語は一切禁止です。JSON内ではLaTeXのバックスラッシュコマンドを二重エスケープしてください（例：\\frac のように。\fracではない）。",
+        "あなたは優れた教師であり教育コンテンツ作成の専門家です。提供された教材テキストから知識ポイント、例題、練習問題を抽出してください。\\n\\n【言語強制要件】すべての内容を必ず日本語で出力してください（知識ポイントのタイトルと内容、例題の問題と解答、練習問題の問題と解答）。英語、中国語、その他の言語は一切禁止です。JSON内ではLaTeXのバックスラッシュコマンドを二重エスケープしてください（例：\\\\frac のように。\\fracではない）。",
       userPrefix: "以下の教材テキストの「",
       userSuffix:
         "」について詳細に分析し、包括的な学習教材を抽出してください。\n\n" +
         "【言語強制要件 - 最重要】\n" +
-        "- すべての出力内容は必ず日本語で出力すること：知識ポイントのタイトル・内容、例題の問題・解答、練習問題の問題・解答\n" +
+        "- すべての出力内容は必ず日本語で出力すること\n" +
         "- どのフィールドでも英語・中国語・その他の言語を絶対に使用しないこと\n" +
         "- 原文が他の言語の場合は、すべて専門的で正確な日本語に翻訳すること\n\n" +
-        "【知識ポイント - 詳細必須】\n" +
-        "- 各知識ポイントは300字以上の詳細な説明を含め、内容を充実させること\n" +
-        "- Markdown形式を積極的に活用：**太字**で核心概念を強調、*斜体*で注意事項を表示、==ハイライト==で重要な公式を目立たせる\n" +
-        "- 段落は空行（連続した\\n）で区切り、内容の階層を明確にすること\n" +
-        "- 箇条書き（ - 項目）や番号付きリスト（1. 項目）を使って要��を整理するが、Markdown見出し（# ## ###）は使用禁止\n" +
-        "- 各知識ポイントの構造：**概念定義**（明確な言葉で）、**核心的性質**（重要性質を列挙し説明）、**導出過程**（あれば段階的に）、**応用場面**（少なくとも2つの具体例）、**記憶のコツ**（覚え方の工夫）\n" +
+        "【知識ポイント作成ガイド — 忍耐強い教師のように説明すること】\n" +
+        "- 各知識ポイントの content は400字以上で、教師のように丁寧に説明すること\n" +
+        "- ==複雑な概念をわかりやすい言葉で説明==：まず「何か」、次に「なぜ重要か」、最後に「どう使うか」\n" +
+        "- 以下の段落構造を厳守（段落間は空行で区切る）：\n" +
+        "  1. **概念定義**：一文で正確に定義し、平易な言葉で展開\n" +
+        "  2. **核心的性質**：箇条書き（ - 使用）で各性質を列挙し、簡潔な説明を添える\n" +
+        "  3. **導出/証明**（該当する場合）：段階的に導出過程を示す\n" +
+        "  4. **応用例**：少なくとも2つの具体的な場面で、「どんな問題、どう使う、何が得られる」を説明\n" +
+        "  5. **記憶のコツ**：覚え方の工夫、語呂合わせ、図形的な方法を提供\n" +
+        "- Markdownを活用して読みやすく：**太字**で核心用語、*斜体*で注意事項、==ハイライト==で重要公式\n" +
+        "- リスト（ - と 1. ）で情報を整理するが、# ## ### 見出しは禁止\n" +
         "- すべての数式はLaTeX形式：インライン $...$、重要な式は $$...$$ で単独行に\n" +
         "- 【禁止】数式の内部で絶対に改行しないこと！\n" +
-        "- 数式例：分数 \\frac{a}{b}、ルート \\sqrt{x}、積分 \\int_a^b f(x)dx、極限 \\lim_{x\\to 0}、和 \\sum_{i=1}^n\n" +
-        "- 知識ポイント数：3〜6個\n\n" +
-        "【例題 - 完全必須】\n" +
-        "- 各例題は **第1步：**、**第2步：** と段落分けして完全な解答を含めること\n" +
-        "- 各ステップで **分析：**、**導出：**、**計算：** のように根拠を説明\n" +
-        "- 最後に **答案：** で最終結論を別段落で示す\n" +
-        "- すべての数式は $...$ または $$...$$ で囲む\n" +
+        "- 知識ポイント数：教材の内容を完全にカバーし、重要な知識ポイントを漏らさないこと\n\n" +
+        "【例題作成ガイド】\n" +
+        "- 易から難へ並べる：最初は基礎題、最後は総合題\n" +
+        "- 解答形式：\n" +
+        "  **第1步：題意の分析** - 既知条件と求めるものを明確に\n" +
+        "  **第2步：解法の選択** - なぜこの定理/公式を使うのか説明\n" +
+        "  **第3步：計算の実行** - 段階的に計算、各等号は独立した行に\n" +
+        "  **第N步：結果の検証** - 答えの妥当性を確認\n" +
+        "  **答案：** 最終結果を独立した段落で\n" +
+        "- すべての等号と数式を $...$ で囲む\n" +
         "- 各例題に relatedKnowledgePoints 配列を含めること\n" +
-        "- 例題数：2〜4問、易から難へ\n\n" +
+        "- 例題数：2〜4問\n\n" +
         "【練習問題】\n" +
-        "- 各問題に詳細な解答を含め、例題と同じ構造（ステップ分け・答案付き）\n" +
+        "- 例題と同じ構造（ステップ分け・答案付き）\n" +
         "- 各問題に relatedKnowledgePoints 配列を含めること\n" +
         "- 問題数：1〜3問\n\n" +
         "出力形式（厳密なJSON、マークダウンのコードブロックなし）：\n" +
         "{\n" +
         '  "knowledgePoints": [\n' +
-        '    { "title": "知識ポイントのタイトル", "content": "詳細な説明（数式は$...$形式）" }\n' +
+        '    { "title": "知識ポイントのタイトル", "content": "上記ガイドに従った詳細な説明" }\n' +
         "  ],\n" +
         '  "examples": [\n' +
-        '    { "question": "問題（数式は$...$形式）", "solution": "解答（ステップ分け、数式は$...$形式）", "relatedKnowledgePoints": ["KP1", "KP2"] }\n' +
+        '    { "question": "問題", "solution": "段階的な解答", "relatedKnowledgePoints": ["KP1", "KP2"] }\n' +
         "  ],\n" +
         '  "exercises": [\n' +
-        '    { "question": "問題内容", "solution": "解答", "relatedKnowledgePoints": ["KP1"] }\n' +
+        '    { "question": "問題", "solution": "段階的な解答", "relatedKnowledgePoints": ["KP1"] }\n' +
         "  ]\n" +
         "}\n\n" +
         "教材テキスト：\n",
