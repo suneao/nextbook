@@ -183,6 +183,12 @@ export default function ProjectDetailClient() {
   const [selectedSubChapterId, setSelectedSubChapterId] = useState<
     string | null
   >(null);
+  // Scroll to top when sub-chapter changes
+  useEffect(() => {
+    document
+      .querySelector('[data-slot="scroll-area-viewport"]')
+      ?.scrollTo({ top: 0, behavior: "smooth" });
+  }, [selectedSubChapterId]);
   const { toast } = useToast();
   const { setActiveTaskCount, setActiveTaskList } = useToast();
   const [chatOpen, setChatOpen] = useState(false);
