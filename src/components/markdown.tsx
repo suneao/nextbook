@@ -112,6 +112,26 @@ export function Markdown({
     text = text.replace(/\\\[/g, "$$").replace(/\\\]/g, "$$");
     text = text.replace(/==(.+?)==/g, "~~$1~~");
 
+    // Convert single newlines to double for paragraph breaks (outside math)
+    // Protect inline math and block math from newline doubling
+    const mathProtected: string[] = [];
+    text = text.replace(/\$\$[\s\S]*?\$\$/g, (m) => {
+      mathProtected.push(m);
+      return `%%MP${mathProtected.length - 1}%%`;
+    });
+    text = text.replace(/\$[\s\S]+?\$/g, (m) => {
+      mathProtected.push(m);
+      return `%%MP${mathProtected.length - 1}%%`;
+    });
+    // Double newlines outside math
+    text = text.replace(/\n/g, "\n\n");
+    // Restore math
+    text = text.replace(/%%MP(\d+)%%/g, (_, i) => {
+      return mathProtected[parseInt(i)];
+    });
+    // Clean up excessive newlines
+    text = text.replace(/\n{3,}/g, "\n\n");
+
     return (
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}

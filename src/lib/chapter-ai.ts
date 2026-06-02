@@ -70,7 +70,9 @@ export async function analyzeChapters(
         "  }\n" +
         "]\n\n" +
         (titlesStr
-          ? "前面已识别的章节标题（请保持格式一致）：\n" + titlesStr + "\n\n"
+          ? "【格式统一要求】前面已识别的章节标题：\n" +
+            titlesStr +
+            "\n\n请确保新识别的章节标题与上述已有标题保持完全一致的格式风格（包括编号方式、标点符号、空格等）。\n\n"
           : "") +
         "教材文本：\n",
     },
@@ -110,9 +112,9 @@ export async function analyzeChapters(
         "  }\n" +
         "]\n\n" +
         (titlesStr
-          ? "Previously identified chapter titles (maintain consistent formatting):\n" +
+          ? "[FORMAT CONSISTENCY] Previously identified chapter titles:\n" +
             titlesStr +
-            "\n\n"
+            "\n\nNew chapter titles MUST match the EXACT formatting style of the above titles (numbering, punctuation, spacing, etc.).\n\n"
           : "") +
         "Textbook text:\n",
     },
@@ -151,9 +153,9 @@ export async function analyzeChapters(
         "  }\n" +
         "]\n\n" +
         (titlesStr
-          ? "以前に識別された章タイトル（一貫したフォーマットを維持してください）：\n" +
+          ? "【フォーマット統一】以前に識別された章タイトル：\n" +
             titlesStr +
-            "\n\n"
+            "\n\n新しい章タイトルは上記のタイトルと完全に同じフォーマットスタイル（番号付け、句読点、スペースなど）に合わせてください。\n\n"
           : "") +
         "教材テキスト：\n",
     },
@@ -205,18 +207,20 @@ export async function extractKnowledgePoints(
         "- 严禁在任何字段中输出英文、日文或其他语言\n" +
         "- 如果原文是其他语言，你必须将它们翻译为专业准确的中文\n\n" +
         "【知识点要求 - 务必详细】\n" +
-        "- 每个知识点必须包含200字以上的详细中文说明\n" +
-        "- 禁止使用Markdown标题格式（# ## ###），内容中使用**加粗**、*斜体*、==荧光高亮==强调重点\n" +
-        "- 每个知识点应包含：概念定义、核心性质、推导过程（如有）、典型应用场景、记忆技巧\n" +
-        "- 公式必须使用LaTeX：行内 $...$，块级 $$...$$（独占一行）\n" +
-        "- 【禁止】公式内部绝对不能换行！所有数学表达式必须写在同一行中，否则渲染会失败\n" +
-        "- 分数 \\frac{}{}，根号 \\sqrt{}，积分 \\int，求和 \\sum，极限 \\lim\n" +
+        "- 每个知识点必须包含300字以上的详细说明，内容要充实、有深度\n" +
+        "- 充分利用Markdown排版：用**加粗**标出核心概念，用*斜体*标出注意事项，用==荧光高亮==标出关键公式\n" +
+        "- 段落之间使用空行分隔（连续两个\\n），让内容层次分明\n" +
+        "- 善用无序列表（ - 开头）和有序列表（1. 开头）来组织要点，但不要使用Markdown标题（# ## ###）\n" +
+        "- 每个知识点结构：**概念定义**（用明确的语言定义）、**核心性质**（列出并解释关键性质）、**推导过程**（如有，分步骤展示）、**应用场景**（至少2个具体例子）、**记忆技巧**（帮助记忆的口诀或方法）\n" +
+        "- 所有数学公式必须使用LaTeX格式：行内公式用 $...$ 包裹，重要公式独占一行用 $$...$$ 包裹\n" +
+        "- 【禁止】公式内部绝对不能换行！所有数学表达式必须写在同一行中\n" +
+        "- 公式示例：分数 \\frac{a}{b}、根号 \\sqrt{x}、积分 \\int_a^b f(x)dx、极限 \\lim_{x\\to 0}、求和 \\sum_{i=1}^n\n" +
         "- 知识点数量：3-6个，确保覆盖完整\n\n" +
         "【例题要求 - 务必完整】\n" +
-        "- 每题必须包含完整的解答步骤，使用 **第1步：**、**第2步：** 等格式标注每一步\n" +
-        "- 每步都要说明依据的定理或性质，如：**分析思路：**、**证明过程：**、**代入计算：**\n" +
-        "- 解答最后用一行 **答案：** 给出最终结论\n" +
-        "- 题目和解答中使用 $...$ 包裹所有数学公式\n" +
+        "- 每题必须包含完整的解答步骤，使用 **第1步：**、**第2步：** 分段落标注\n" +
+        "- 每步都要说明依据的定理或性质，如：**分析思路：**、**推导过程：**、**代入计算：**\n" +
+        "- 解答最后用 **答案：** 给出最终结论，答案独占一个段落\n" +
+        "- 所有数学公式使用 $...$ 或 $$...$$ 包裹\n" +
         "- 每题需包含 relatedKnowledgePoints 数组，列出本题涉及的知识点名称（与上文提取的知识点标题对应）\n" +
         "- 例题数量：2-4道，从易到难\n\n" +
         "【课后习题要求】\n" +
@@ -248,19 +252,21 @@ export async function extractKnowledgePoints(
         "- Do NOT output Chinese, Japanese, or any other language in ANY field\n" +
         "- If the source text is in another language, you MUST translate everything to professional, accurate English\n\n" +
         "【Knowledge Points - Must be detailed】\n" +
-        "- Each knowledge point must include 200+ words of detailed explanation in English\n" +
-        "- Do NOT use Markdown heading format (# ## ###). Use **bold**, *italic*, ==highlight== for emphasis\n" +
-        "- Each knowledge point should include: definition, key properties, derivations (if any), typical applications, memory tips\n" +
-        "- Use LaTeX for formulas: inline $...$, block $$...$$\n" +
-        "- [FORBIDDEN] Never put line breaks inside math formulas! All math expressions must be on a single line, otherwise rendering will fail\n" +
-        "- Fractions \\frac{}{}, roots \\sqrt{}, integrals \\int, sums \\sum, limits \\lim\n" +
+        "- Each knowledge point must include 300+ words of detailed explanation in English with rich content\n" +
+        "- Use Markdown formatting extensively: **bold** for core concepts, *italic* for notes/warnings, ==highlight== for important formulas\n" +
+        "- Separate paragraphs with blank lines (double \\n) to create clear visual hierarchy\n" +
+        "- Use bullet lists ( - item) and numbered lists (1. item) to organize key points, but avoid Markdown headings (# ## ###)\n" +
+        "- Structure each knowledge point: **Definition** (clear language), **Key Properties** (list and explain), **Derivation** (if applicable, step-by-step), **Applications** (at least 2 concrete examples), **Memory Tips** (mnemonics or tricks)\n" +
+        "- ALL math formulas MUST use LaTeX: inline formulas in $...$, important standalone formulas in $$...$$\n" +
+        "- [FORBIDDEN] Never put line breaks inside math formulas! All math expressions must be on a single line\n" +
+        "- Formula examples: fractions \\frac{a}{b}, roots \\sqrt{x}, integrals \\int_a^b f(x)dx, limits \\lim_{x\\to 0}, sums \\sum_{i=1}^n\n" +
         "- Number of knowledge points: 3-6, ensure complete coverage\n\n" +
         "【Examples - Must be complete】\n" +
-        "- Each example must include complete step-by-step solutions, labeled as **Step 1:**, **Step 2:**, etc.\n" +
-        "- Each step must explain the reasoning: **Analysis:**, **Proof:**, **Calculation:**\n" +
-        "- End with **Answer:** giving the final result\n" +
-        "- Wrap all math formulas in $...$\n" +
-        "- Each example must include a relatedKnowledgePoints array listing the knowledge point names this problem relates to\n" +
+        "- Each example must include complete step-by-step solutions using **Step 1:**, **Step 2:** as separate paragraphs\n" +
+        "- Each step must explain the reasoning: **Analysis:**, **Derivation:**, **Calculation:**\n" +
+        "- End with **Answer:** giving the final result as a separate paragraph\n" +
+        "- All math formulas in $...$ or $$...$$\n" +
+        "- Each example must include a relatedKnowledgePoints array\n" +
         "- Number of examples: 2-4, from easy to hard\n\n" +
         "【Exercises】\n" +
         "- Each exercise must include a detailed solution, same structure as examples (step-by-step with answer)\n" +
@@ -291,19 +297,21 @@ export async function extractKnowledgePoints(
         "- どのフィールドでも英語・中国語・その他の言語を絶対に使用しないこと\n" +
         "- 原文が他の言語の場合は、すべて専門的で正確な日本語に翻訳すること\n\n" +
         "【知識ポイント - 詳細必須】\n" +
-        "- 各知識ポイントは200字以上の詳細な日本語の説明を含めること\n" +
-        "- Markdownの見出し形式（# ## ###）は禁止。**太字**、*斜体*、==ハイライト==で強調\n" +
-        "- 各知識ポイントに含める：概念の定義、核心的性質、導出過程（あれば）、典型的な応用場面、記憶のコツ\n" +
-        "- 数式はLaTeXを使用：インライン $...$、ブロック $$...$$\n" +
-        "- 【禁止】数式の内部で絶対に改行しないでください！すべての数式は1行で記述しなければレンダリングが失敗します\n" +
-        "- 分数 \\frac{}{}、ルート \\sqrt{}、積分 \\int、和 \\sum、極限 \\lim\n" +
-        "- 知識ポイント数：3〜6個、完全なカバレッジを確保\n\n" +
+        "- 各知識ポイントは300字以上の詳細な説明を含め、内容を充実させること\n" +
+        "- Markdown形式を積極的に活用：**太字**で核心概念を強調、*斜体*で注意事項を表示、==ハイライト==で重要な公式を目立たせる\n" +
+        "- 段落は空行（連続した\\n）で区切り、内容の階層を明確にすること\n" +
+        "- 箇条書き（ - 項目）や番号付きリスト（1. 項目）を使って要��を整理するが、Markdown見出し（# ## ###）は使用禁止\n" +
+        "- 各知識ポイントの構造：**概念定義**（明確な言葉で）、**核心的性質**（重要性質を列挙し説明）、**導出過程**（あれば段階的に）、**応用場面**（少なくとも2つの具体例）、**記憶のコツ**（覚え方の工夫）\n" +
+        "- すべての数式はLaTeX形式：インライン $...$、重要な式は $$...$$ で単独行に\n" +
+        "- 【禁止】数式の内部で絶対に改行しないこと！\n" +
+        "- 数式例：分数 \\frac{a}{b}、ルート \\sqrt{x}、積分 \\int_a^b f(x)dx、極限 \\lim_{x\\to 0}、和 \\sum_{i=1}^n\n" +
+        "- 知識ポイント数：3〜6個\n\n" +
         "【例題 - 完全必須】\n" +
-        "- 各例題は **第1步：**、**第2步：** のようにステップ分けして完全な解答を含めること\n" +
-        "- 各ステップで **分析：**、**証明：**、**計算：** のように根拠を説明\n" +
-        "- 最後に **答案：** で最終結論を示す\n" +
-        "- 数式は $...$ で囲む\n" +
-        "- 各例題に関連する知識ポイントの名前を relatedKnowledgePoints 配列で含めること\n" +
+        "- 各例題は **第1步：**、**第2步：** と段落分けして完全な解答を含めること\n" +
+        "- 各ステップで **分析：**、**導出：**、**計算：** のように根拠を説明\n" +
+        "- 最後に **答案：** で最終結論を別段落で示す\n" +
+        "- すべての数式は $...$ または $$...$$ で囲む\n" +
+        "- 各例題に relatedKnowledgePoints 配列を含めること\n" +
         "- 例題数：2〜4問、易から難へ\n\n" +
         "【練習問題】\n" +
         "- 各問題に詳細な解答を含め、例題と同じ構造（ステップ分け・答案付き）\n" +
