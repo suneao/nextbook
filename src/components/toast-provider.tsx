@@ -144,7 +144,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       }}
     >
       {children}
-      <div className="fixed top-16 right-6 z-50 flex flex-col gap-2 pointer-events-none max-w-80">
+      <div className="fixed top-16 right-6 z-50 flex flex-col gap-2 max-w-80 max-h-[60vh] overflow-y-auto">
         {toasts.map((t) => {
           const Icon = icons[t.type];
           const leaving = leavingIds.has(t.id);
@@ -244,7 +244,7 @@ export function NotificationBell() {
       </button>
       {(open || leaving) && (history.length > 0 || activeTaskCount > 0) ? (
         <div
-          className={`absolute right-0 top-16 w-80 bg-white dark:bg-zinc-900 border rounded-xl shadow-2xl ring-1 ring-black/5 dark:ring-white/10 z-50 max-h-80 overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 duration-200 ${
+          className={`absolute right-0 top-16 w-80 bg-white dark:bg-zinc-900 border rounded-xl shadow-2xl ring-1 ring-black/5 dark:ring-white/10 z-50 max-h-80 overflow-y-auto flex flex-col animate-in fade-in slide-in-from-top-2 duration-200 ${
             leaving
               ? "animate-out fade-out slide-out-to-top-2 fill-mode-forwards"
               : ""
@@ -305,7 +305,7 @@ export function NotificationBell() {
               {t("notification.clear")}
             </button>
           </div>
-          <div className="overflow-y-auto">
+          <div className="">
             {history.map((t) => (
               <div
                 key={t.id}
