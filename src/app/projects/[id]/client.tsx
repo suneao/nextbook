@@ -788,10 +788,9 @@ export default function ProjectDetailClient() {
         await Promise.all(batch.map((t) => t()));
         if (controller.signal.aborted) break;
         // Save partial progress after each batch
-        const snapshot = initialProject;
         const partial = {
-          ...snapshot,
-          chapters: snapshot.chapters.map((ch) => ({
+          ...initialProject,
+          chapters: chapters.map((ch) => ({
             ...ch,
             subChapters: ch.subChapters.map((sc) => {
               const r = results.get(sc.id);
