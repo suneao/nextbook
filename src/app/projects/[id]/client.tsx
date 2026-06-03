@@ -574,6 +574,16 @@ export default function ProjectDetailClient() {
     const initialProject = project;
     const controller = new AbortController();
     const taskId = addTask("AI分析", controller);
+    // Collect results to avoid race conditions
+    const results = new Map<
+      string,
+      {
+        knowledgePoints: KnowledgePoint[];
+        examples: Example[];
+        exercises: Exercise[];
+      }
+    >();
+    let chapters: Chapter[] = [];
     try {
       const validTextbooks = initialProject.textbooks.filter(
         (tb) => tb.fileData,
@@ -713,6 +723,8 @@ export default function ProjectDetailClient() {
       }
 
       setProject({ ...initialProject, chapters });
+      // Persist chapter structure immediately
+      await saveProject({ ...initialProject, chapters });
 
       // Flatten all sub-chapters for parallel processing
       const flatTasks: { sc: SubChapter }[] = [];
@@ -725,15 +737,6 @@ export default function ProjectDetailClient() {
 
       let failedCount = 0;
       let completedCount = 0;
-      // Collect results to avoid race conditions
-      const results = new Map<
-        string,
-        {
-          knowledgePoints: KnowledgePoint[];
-          examples: Example[];
-          exercises: Exercise[];
-        }
-      >();
 
       const updateProgress = () => {
         const done = completedCount + failedCount;
@@ -784,6 +787,25 @@ export default function ProjectDetailClient() {
         const batch = taskFns.slice(i, i + CONCURRENCY);
         await Promise.all(batch.map((t) => t()));
         if (controller.signal.aborted) break;
+        // Save partial progress after each batch
+        const snapshot = initialProject;
+        const partial = {
+          ...snapshot,
+          chapters: snapshot.chapters.map((ch) => ({
+            ...ch,
+            subChapters: ch.subChapters.map((sc) => {
+              const r = results.get(sc.id);
+              if (!r) return sc;
+              return {
+                ...sc,
+                knowledgePoints: r.knowledgePoints,
+                examples: r.examples,
+                exercises: r.exercises,
+              };
+            }),
+          })),
+        };
+        await saveProject(partial);
       }
 
       // Merge all results into latest state atomically
@@ -846,7 +868,28 @@ export default function ProjectDetailClient() {
         );
       }
     } catch (e) {
-      if (e instanceof Error && e.name === "AbortError") return;
+      if (e instanceof Error && e.name === "AbortError") {
+        // Save partial progress using the analyzed chapters (not initialProject)
+        const merged = {
+          ...initialProject,
+          chapters: chapters.map((ch) => ({
+            ...ch,
+            subChapters: ch.subChapters.map((sc) => {
+              const r = results.get(sc.id);
+              if (!r) return sc;
+              return {
+                ...sc,
+                knowledgePoints: r.knowledgePoints,
+                examples: r.examples,
+                exercises: r.exercises,
+              };
+            }),
+          })),
+        };
+        setProject(merged);
+        await saveProject(merged);
+        return;
+      }
       const msg = e instanceof Error ? e.message : String(e);
       toast("Analysis failed: " + msg, "error");
     } finally {
@@ -1148,6 +1191,14 @@ export default function ProjectDetailClient() {
         controller,
       );
       const language = settings.language || "zh-CN";
+      // Collect results in a fixed array to avoid race conditions
+      const results: ({
+        knowledgePoints: KnowledgePoint[];
+        examples: Example[];
+        exercises: Exercise[];
+      } | null)[] = new Array(
+        initialProject.chapters[chapterIndex]?.subChapters.length || 0,
+      ).fill(null);
       try {
         const pdfTexts = await Promise.all(
           validTextbooks.map((tb) => extractTextFromPDF(tb.fileData!)),
@@ -1176,13 +1227,6 @@ export default function ProjectDetailClient() {
           updateTask(taskId, `(${done}/${total})`);
         };
         updateProgress();
-
-        // Collect results in a fixed array to avoid race conditions
-        const results: ({
-          knowledgePoints: KnowledgePoint[];
-          examples: Example[];
-          exercises: Exercise[];
-        } | null)[] = new Array(total).fill(null);
 
         // Process in parallel with concurrency limit of 3
         const CONCURRENCY = 3;
@@ -1273,7 +1317,31 @@ export default function ProjectDetailClient() {
           await saveProject({ ...initialProject, chapters: saved });
         }
       } catch (e) {
-        if (e instanceof Error && e.name === "AbortError") return;
+        if (e instanceof Error && e.name === "AbortError") {
+          // Save partial progress before aborting
+          const merged = [
+            ...initialProject.chapters.slice(0, chapterIndex),
+            {
+              ...initialProject.chapters[chapterIndex],
+              subChapters: initialProject.chapters[
+                chapterIndex
+              ].subChapters.map((sc, i) => {
+                const r = results[i];
+                if (!r) return sc;
+                return {
+                  ...sc,
+                  knowledgePoints: r.knowledgePoints,
+                  examples: r.examples,
+                  exercises: r.exercises,
+                };
+              }),
+            },
+            ...initialProject.chapters.slice(chapterIndex + 1),
+          ];
+          setProject({ ...initialProject, chapters: merged });
+          await saveProject({ ...initialProject, chapters: merged });
+          return;
+        }
         toast(
           "Regeneration failed: " +
             (e instanceof Error ? e.message : String(e)),
