@@ -1537,7 +1537,7 @@ export default function ProjectDetailClient() {
       >
         {sidebarWidth > 0 && (
           <div
-            className="absolute top-0 -right-1.5 w-4 h-full cursor-col-resize hover:bg-primary/30 active:bg-primary/50 z-20 touch-none"
+            className="absolute top-0 -right-2 w-2 h-full cursor-col-resize hover:bg-primary/30 active:bg-primary/50 z-20 touch-none"
             onMouseDown={(e) => {
               e.preventDefault();
               dragStart.current = { mx: e.clientX, w: sidebarWidth };
