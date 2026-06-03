@@ -744,6 +744,26 @@ function parseKnowledgeResponse(response: string): {
   }
 
   if (!raw) {
+    // Check if the response looks like reasoning/thinking content
+    // (e.g. DeepSeek models output reasoning_content when content is empty)
+    const looksLikeReasoning =
+      /我们要求|我需要|让我|我应该|I (?:need|should|must|will|can)|Let me|First[,:]|The user/.test(
+        clean.slice(0, 300),
+      );
+    if (looksLikeReasoning) {
+      console.warn(
+        "[chapter-ai] The AI response appears to be reasoning/thinking text, not a JSON result. " +
+          "This usually means the model was truncated before it could produce its final answer. " +
+          "Try increasing maxOutputTokens in model settings. " +
+          "Response prefix:",
+        clean.slice(0, 200),
+      );
+    } else {
+      console.warn(
+        "[chapter-ai] Failed to parse knowledge response as JSON. Response prefix:",
+        clean.slice(0, 200),
+      );
+    }
     raw = { knowledgePoints: [], examples: [], exercises: [] };
   }
 

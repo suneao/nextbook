@@ -82,19 +82,44 @@ async function openAICompletion(
 
   const data = await res.json();
   const message = data.choices?.[0]?.message;
-  const result =
-    message?.content?.trim() || message?.reasoning_content?.trim() || "";
+  const content = message?.content?.trim();
+  const reasoning = message?.reasoning_content?.trim();
 
-  // Log warning if finish_reason is not "stop" (e.g. "length" = truncated)
   const finishReason = data.choices?.[0]?.finish_reason;
-  if (finishReason && finishReason !== "stop") {
-    console.warn(
-      `[ai-service] Completion finished with reason "${finishReason}". ` +
-        `Consider increasing max_tokens. Response length: ${result.length}`,
-    );
+
+  // Prefer content (the actual answer). reasoning_content is the model's
+  // internal chain-of-thought and is NOT a structured response.
+  if (content) {
+    if (finishReason && finishReason !== "stop") {
+      console.warn(
+        `[ai-service] Completion finished with reason "${finishReason}". ` +
+          `Consider increasing max_tokens. Response length: ${content.length}`,
+      );
+    }
+    return content;
   }
 
-  return result;
+  // If content is empty, something went wrong.
+  // Falling back to reasoning_content is a last resort — it's likely
+  // the model's thinking, not its answer, and will fail JSON parsing.
+  if (reasoning) {
+    console.warn(
+      `[ai-service] The model returned no content field. ` +
+        `Falling back to reasoning_content (${reasoning.length} chars). ` +
+        `This is the model's internal thinking and may not be a valid response. ` +
+        (finishReason && finishReason !== "stop"
+          ? `Finish reason: "${finishReason}" — the model was likely truncated before it could produce its answer. ` +
+            `Try increasing max_tokens (current output may be dominated by reasoning tokens).`
+          : `Finish reason: "${finishReason || "unknown"}".`),
+    );
+    return reasoning;
+  }
+
+  console.warn(
+    `[ai-service] The model returned neither content nor reasoning_content. ` +
+      `Finish reason: "${finishReason || "unknown"}".`,
+  );
+  return "";
 }
 
 // ── Anthropic API ────────────────────────────────────────────────────────

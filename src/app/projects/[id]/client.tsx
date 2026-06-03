@@ -675,21 +675,37 @@ export default function ProjectDetailClient() {
                 newRaw.match(/POS_(\d+)/) || newRaw.match(/(\d+)/);
               const lastPos = parseInt(lastMatch?.[1] ?? "0", 10);
               const newPos = parseInt(newMatch?.[1] ?? "0", 10);
-              if (Math.abs(newPos - lastPos) > SEGMENT_SIZE * 2) return false;
+              if (Math.abs(newPos - lastPos) > SEGMENT_SIZE * 2) {
+                console.warn(
+                  `[chapter-ai] Chapter "${ch.title}" titles match but posMarkers are too far apart ` +
+                    `(existing: ${lastPos}, new: ${newPos}, max: ${SEGMENT_SIZE * 2}). ` +
+                    `Creating as separate chapter — this may indicate AI misidentified the chapter boundary.`,
+                );
+                return false;
+              }
             }
             return true;
           });
           if (dup) {
-            const existingLast = dup.subChapters[dup.subChapters.length - 1];
-            const newFirst = ch.subChapters[0];
-            if (
-              existingLast &&
-              newFirst &&
-              existingLast.title === newFirst.title
-            ) {
-              ch.subChapters.shift();
+            // Deduplicate: remove subchapters from the new chapter that
+            // already exist in the existing chapter (by title). This handles
+            // cases where the AI returns the full chapter in both segments.
+            const existingTitles = new Set(
+              dup.subChapters.map((sc) => sc.title),
+            );
+            const newSubs = ch.subChapters.filter(
+              (sc) => !existingTitles.has(sc.title),
+            );
+            if (newSubs.length === 0) {
+              console.log(
+                `[chapter-ai] All subchapters of "${ch.title}" already exist, skipping merge.`,
+              );
+              continue;
             }
-            for (const sc of ch.subChapters) {
+            console.log(
+              `[chapter-ai] Merging ${newSubs.length} new subchapter(s) into existing chapter "${ch.title}" (skipped ${ch.subChapters.length - newSubs.length} duplicate(s)).`,
+            );
+            for (const sc of newSubs) {
               dup.subChapters.push(sc);
             }
           } else {
@@ -715,6 +731,23 @@ export default function ProjectDetailClient() {
           allSCsFlat[i].textEnd = allSCsFlat[i + 1].textStart!;
         }
       }
+
+      // Validate: check for non-monotonic textStart values (backward jumps
+      // indicate duplicate or misordered subchapters from segment merging).
+      let prevTextStart = -1;
+      for (const sc of allSCsFlat) {
+        if (sc.textStart != null) {
+          if (sc.textStart < prevTextStart) {
+            console.warn(
+              `[chapter-ai] Non-monotonic textStart detected: subchapter "${sc.title}" ` +
+                `has textStart=${sc.textStart} but previous was ${prevTextStart}. ` +
+                `This likely means duplicate subchapters from segment merging corrupted the position order.`,
+            );
+          }
+          prevTextStart = sc.textStart;
+        }
+      }
+
       for (const sc of allSCsFlat) {
         if (sc.textStart == null)
           sc.textStart = Math.floor(pdfText.length * 0.05);
@@ -760,8 +793,39 @@ export default function ProjectDetailClient() {
             Math.max(textEnd + 500, textStart + 50000),
           );
           const chapterText = pdfText.slice(sliceStart, sliceEnd);
+
+          let finalChapterText = chapterText;
+
+          // Validate: check if the subchapter title appears in the extracted text.
+          // If not, the posMarker likely points to the wrong area of the PDF.
+          // Attempt to find the correct position by searching the full PDF text.
+          const titleInText = chapterText.includes(sc.title);
+          if (!titleInText) {
+            const shortTitle = sc.title.replace(/^[\d.]+\s*/, "").trim();
+            const shortMatch =
+              shortTitle.length > 4 && chapterText.includes(shortTitle);
+            if (!shortMatch) {
+              const foundIdx = pdfText.indexOf(sc.title);
+              if (foundIdx >= 0) {
+                console.warn(
+                  `[chapter-ai] Subchapter "${sc.title}" not in posMarker range ` +
+                    `(${sliceStart}-${sliceEnd}), but found at ${foundIdx}. Using corrected position.`,
+                );
+                finalChapterText = pdfText.slice(
+                  Math.max(0, foundIdx - 500),
+                  Math.min(pdfText.length, foundIdx + 50000),
+                );
+              } else {
+                console.warn(
+                  `[chapter-ai] Subchapter "${sc.title}" not found anywhere in PDF. ` +
+                    `AI may have hallucinated this title. Text prefix: ${chapterText.slice(0, 150).replace(/\n/g, " ")}`,
+                );
+              }
+            }
+          }
+
           const knowledge = await extractKnowledgePoints(
-            chapterText,
+            finalChapterText,
             sc.title,
             chapterModelId,
             controller.signal,
@@ -1096,21 +1160,35 @@ export default function ProjectDetailClient() {
                 newRaw.match(/POS_(\d+)/) || newRaw.match(/(\d+)/);
               const lastPos = parseInt(lastMatch?.[1] ?? "0", 10);
               const newPos = parseInt(newMatch?.[1] ?? "0", 10);
-              if (Math.abs(newPos - lastPos) > SEGMENT_SIZE * 2) return false;
+              if (Math.abs(newPos - lastPos) > SEGMENT_SIZE * 2) {
+                console.warn(
+                  `[chapter-ai] Chapter "${ch.title}" titles match but posMarkers are too far apart ` +
+                    `(existing: ${lastPos}, new: ${newPos}, max: ${SEGMENT_SIZE * 2}). ` +
+                    `Creating as separate chapter — this may indicate AI misidentified the chapter boundary.`,
+                );
+                return false;
+              }
             }
             return true;
           });
           if (dup) {
-            const existingLast = dup.subChapters[dup.subChapters.length - 1];
-            const newFirst = ch.subChapters[0];
-            if (
-              existingLast &&
-              newFirst &&
-              existingLast.title === newFirst.title
-            ) {
-              ch.subChapters.shift();
+            // Deduplicate: remove subchapters from the new chapter that
+            // already exist in the existing chapter (by title). This handles
+            // cases where the AI returns the full chapter in both segments.
+            const existingTitles = new Set(
+              dup.subChapters.map((sc) => sc.title),
+            );
+            const newSubs = ch.subChapters.filter(
+              (sc) => !existingTitles.has(sc.title),
+            );
+            if (newSubs.length > 0) {
+              console.log(
+                `[chapter-ai] Merging ${newSubs.length} new subchapter(s) into existing chapter "${ch.title}" (skipped ${ch.subChapters.length - newSubs.length} duplicate(s)).`,
+              );
+              for (const sc of newSubs) {
+                dup.subChapters.push(sc);
+              }
             }
-            for (const sc of ch.subChapters) dup.subChapters.push(sc);
           } else {
             ch.order = chapters.length;
             chapters.push(ch);
@@ -1215,10 +1293,9 @@ export default function ProjectDetailClient() {
           .join("");
         if (controller.signal.aborted) return;
 
-        const chapters: Chapter[] = [...initialProject.chapters];
         let completedCount = 0;
         let failedCount = 0;
-        const subChapters = chapters[chapterIndex].subChapters;
+        const subChapters = initialProject.chapters[chapterIndex].subChapters;
         const total = subChapters.length;
 
         const updateProgress = () => {
@@ -1234,13 +1311,28 @@ export default function ProjectDetailClient() {
           try {
             const textStart = sc.textStart ?? Math.floor(pdfText.length * 0.05);
             const textEnd = sc.textEnd ?? pdfText.length;
-            const chapterText = pdfText.slice(
+            let chapterText = pdfText.slice(
               Math.max(0, textStart - 500),
               Math.min(
                 pdfText.length,
                 Math.max(textEnd + 500, textStart + 50000),
               ),
             );
+
+            // Auto-correct if the title is not in the posMarker range
+            if (!chapterText.includes(sc.title)) {
+              const foundIdx = pdfText.indexOf(sc.title);
+              if (foundIdx >= 0) {
+                console.warn(
+                  `[chapter-ai] Regenerate: title not at posMarker, found at ${foundIdx}. Correcting.`,
+                );
+                chapterText = pdfText.slice(
+                  Math.max(0, foundIdx - 500),
+                  Math.min(pdfText.length, foundIdx + 50000),
+                );
+              }
+            }
+
             const knowledge = await extractKnowledgePoints(
               chapterText,
               sc.title,
@@ -1271,49 +1363,39 @@ export default function ProjectDetailClient() {
           if (controller.signal.aborted) break;
         }
 
-        // Merge all results into latest state atomically
-        setProject((prev) => {
-          if (!prev) return prev;
-          const latest = prev.chapters;
-          const mergedSubChapters =
-            latest[chapterIndex]?.subChapters.map((sc, i) => {
-              const r = results[i];
-              if (!r) return sc;
-              return {
-                ...sc,
-                knowledgePoints: r.knowledgePoints,
-                examples: r.examples,
-                exercises: r.exercises,
-              };
-            }) || [];
-          const mergedChapters = [
-            ...latest.slice(0, chapterIndex),
-            { ...latest[chapterIndex], subChapters: mergedSubChapters },
-            ...latest.slice(chapterIndex + 1),
-          ];
-          return { ...prev, chapters: mergedChapters };
-        });
-
         if (failedCount > 0) {
           toast(failedCount + " section(s) failed to regenerate.", "warning");
         }
         if (!controller.signal.aborted) {
-          // Save the merged result directly from latest state
-          const saved = chapters;
-          saved[chapterIndex] = {
-            ...saved[chapterIndex],
-            subChapters: saved[chapterIndex].subChapters.map((sc, i) => {
-              const r = results[i];
-              if (!r) return sc;
-              return {
-                ...sc,
-                knowledgePoints: r.knowledgePoints,
-                examples: r.examples,
-                exercises: r.exercises,
-              };
-            }),
-          };
-          await saveProject({ ...initialProject, chapters: saved });
+          // Race-condition-safe save via functional setProject
+          let mergedChapter: Chapter | null = null;
+          setProject((prev) => {
+            if (!prev) return prev;
+            const latest = prev.chapters[chapterIndex];
+            if (!latest) return prev;
+            mergedChapter = {
+              ...latest,
+              subChapters: latest.subChapters.map((sc, i) => {
+                const r = results[i];
+                if (!r) return sc;
+                return {
+                  ...sc,
+                  knowledgePoints: r.knowledgePoints,
+                  examples: r.examples,
+                  exercises: r.exercises,
+                };
+              }),
+            };
+            const newChapters = [...prev.chapters];
+            newChapters[chapterIndex] = mergedChapter;
+            return { ...prev, chapters: newChapters };
+          });
+          if (mergedChapter) {
+            const toSave = { ...initialProject };
+            toSave.chapters = [...initialProject.chapters];
+            toSave.chapters[chapterIndex] = mergedChapter;
+            await saveProject(toSave);
+          }
         }
       } catch (e) {
         if (e instanceof Error && e.name === "AbortError") {
