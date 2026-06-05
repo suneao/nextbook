@@ -386,7 +386,7 @@ export default function ProjectDetailClient() {
             return `\n\n【${label}】\n\n${pdfTexts[i]}`;
           })
           .join("");
-        const PAD = 2000;
+        const PAD = 5000;
         let pdfText = fullText;
         if (sc.textStart != null) {
           const start = Math.max(0, sc.textStart - PAD);
@@ -719,15 +719,26 @@ export default function ProjectDetailClient() {
 
       const allSCsFlat = chapters.flatMap((ch) => ch.subChapters);
       for (const sc of allSCsFlat) {
+        // Convert posMarker → textStart
         if (sc.posMarker != null) {
           const raw = String(sc.posMarker);
           const m = raw.match(/POS_(\d+)/) || raw.match(/(\d+)/);
           if (m) sc.textStart = parseInt(m[1], 10);
         }
+        // Convert endPosMarker → textEnd (AI-provided section boundary)
         sc.textEnd = undefined;
+        if (sc.endPosMarker != null) {
+          const raw = String(sc.endPosMarker);
+          const m = raw.match(/POS_(\d+)/) || raw.match(/(\d+)/);
+          if (m) sc.textEnd = parseInt(m[1], 10);
+        }
       }
+      // For subchapters without endPosMarker, use next subchapter's start
       for (let i = 0; i < allSCsFlat.length - 1; i++) {
-        if (allSCsFlat[i + 1].textStart != null) {
+        if (
+          allSCsFlat[i].textEnd == null &&
+          allSCsFlat[i + 1].textStart != null
+        ) {
           allSCsFlat[i].textEnd = allSCsFlat[i + 1].textStart!;
         }
       }
@@ -787,10 +798,10 @@ export default function ProjectDetailClient() {
         try {
           const textStart = sc.textStart ?? Math.floor(pdfText.length * 0.05);
           const textEnd = sc.textEnd ?? pdfText.length;
-          const sliceStart = Math.max(0, textStart - 500);
+          const sliceStart = Math.max(0, textStart - 5000);
           const sliceEnd = Math.min(
             pdfText.length,
-            Math.max(textEnd + 500, textStart + 50000),
+            textEnd > textStart ? textEnd + 2000 : textStart + 50000,
           );
           const chapterText = pdfText.slice(sliceStart, sliceEnd);
 
@@ -993,7 +1004,7 @@ export default function ProjectDetailClient() {
           .join("");
         if (controller.signal.aborted) return;
 
-        const PAD = 2000;
+        const PAD = 5000;
         let pdfText = fullText;
         if (sc.textStart != null) {
           const start = Math.max(0, sc.textStart - PAD);
@@ -1199,18 +1210,31 @@ export default function ProjectDetailClient() {
 
       const allSCsFlat = chapters.flatMap((ch) => ch.subChapters);
       for (const sc of allSCsFlat) {
+        // Convert posMarker → textStart
         if (sc.posMarker != null) {
           const raw = String(sc.posMarker);
           const m = raw.match(/POS_(\d+)/) || raw.match(/(\d+)/);
           if (m) sc.textStart = parseInt(m[1], 10);
         }
+        // Convert endPosMarker → textEnd (AI-provided section boundary)
         sc.textEnd = undefined;
+        if (sc.endPosMarker != null) {
+          const raw = String(sc.endPosMarker);
+          const m = raw.match(/POS_(\d+)/) || raw.match(/(\d+)/);
+          if (m) sc.textEnd = parseInt(m[1], 10);
+        }
       }
+      // For subchapters without endPosMarker, use next subchapter's start
       for (let i = 0; i < allSCsFlat.length - 1; i++) {
-        if (allSCsFlat[i + 1].textStart != null) {
+        if (
+          allSCsFlat[i].textEnd == null &&
+          allSCsFlat[i + 1].textStart != null
+        ) {
           allSCsFlat[i].textEnd = allSCsFlat[i + 1].textStart!;
         }
       }
+
+      // Fallback for subchapters missing both markers
       for (const sc of allSCsFlat) {
         if (sc.textStart == null)
           sc.textStart = Math.floor(pdfText.length * 0.05);
@@ -1312,10 +1336,10 @@ export default function ProjectDetailClient() {
             const textStart = sc.textStart ?? Math.floor(pdfText.length * 0.05);
             const textEnd = sc.textEnd ?? pdfText.length;
             let chapterText = pdfText.slice(
-              Math.max(0, textStart - 500),
+              Math.max(0, textStart - 5000),
               Math.min(
                 pdfText.length,
-                Math.max(textEnd + 500, textStart + 50000),
+                textEnd > textStart ? textEnd + 2000 : textStart + 50000,
               ),
             );
 
