@@ -46,6 +46,8 @@ type ToastContextType = {
   activeTaskList: GenTask[];
   setActiveTaskList: (tasks: GenTask[]) => void;
   dismissAll: () => void;
+  unreadCount: number;
+  markAllRead: () => void;
 };
 
 const ToastContext = createContext<ToastContextType>({
@@ -57,6 +59,8 @@ const ToastContext = createContext<ToastContextType>({
   activeTaskList: [],
   setActiveTaskList: () => {},
   dismissAll: () => {},
+  unreadCount: 0,
+  markAllRead: () => {},
 });
 
 let toastId = 0;
@@ -67,12 +71,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const [leavingIds, setLeavingIds] = useState<Set<number>>(new Set());
   const [activeTaskCount, setActiveTaskCount] = useState(0);
   const [activeTaskList, setActiveTaskList] = useState<GenTask[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const toast = useCallback((message: string, type: ToastType = "error") => {
     const id = ++toastId;
     const t: Toast = { id, message, type, time: Date.now() };
     setToasts((prev) => [...prev, t]);
     setHistory((prev) => [t, ...prev].slice(0, 50));
+    setUnreadCount((prev) => prev + 1);
     setTimeout(() => {
       setLeavingIds((prev) => new Set(prev).add(id));
       setTimeout(() => {
@@ -116,6 +122,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const clearHistory = useCallback(() => setHistory([]), []);
 
+  const markAllRead = useCallback(() => setUnreadCount(0), []);
+
   const icons: Record<ToastType, typeof AlertCircle> = {
     error: AlertCircle,
     success: CheckCircle2,
@@ -141,6 +149,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         activeTaskList,
         setActiveTaskList,
         dismissAll,
+        unreadCount,
+        markAllRead,
       }}
     >
       {children}
@@ -180,8 +190,15 @@ export function useToast() {
 // ── Task callbacks ─── imported from lib/task-callbacks.ts
 
 export function NotificationBell() {
-  const { history, clearHistory, activeTaskCount, activeTaskList, dismissAll } =
-    useToast();
+  const {
+    history,
+    clearHistory,
+    activeTaskCount,
+    activeTaskList,
+    dismissAll,
+    unreadCount,
+    markAllRead,
+  } = useToast();
   const taskCallbacks = getTaskCallbacks();
   const { t } = useLocale();
   const [open, setOpen] = useState(false);
@@ -219,7 +236,7 @@ export function NotificationBell() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const totalBadge = history.length + activeTaskCount;
+  const totalBadge = unreadCount + activeTaskCount;
 
   return (
     <div ref={ref} className="relative">
@@ -230,6 +247,7 @@ export function NotificationBell() {
           } else {
             taskCallbacks.onClosePanel?.();
             dismissAll();
+            markAllRead();
             setOpen(true);
           }
         }}

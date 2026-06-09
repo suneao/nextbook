@@ -33,6 +33,7 @@ import {
   Eye,
   Minus,
   Download,
+  Save,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -340,10 +341,20 @@ export default function ProjectDetailClient() {
     });
   }, [projectId]);
 
-  const updateProject = useCallback(async (updated: Project) => {
-    setProject(updated);
-    await saveProject(updated);
-  }, []);
+  const updateProject = useCallback(
+    async (updated: Project) => {
+      setProject(updated);
+      await saveProject(updated);
+      toast(t("common.saved") || "已保存", "success");
+    },
+    [toast, t],
+  );
+
+  const handleSave = useCallback(async () => {
+    if (!project) return;
+    await saveProject(project);
+    toast(t("common.saved") || "已保存", "success");
+  }, [project, toast, t]);
   const handleRegenerateSubChapter = useCallback(
     async (scId: string) => {
       if (!project || project.textbooks.length === 0) return;
@@ -1900,6 +1911,18 @@ export default function ProjectDetailClient() {
               {selectedChapter.title}
             </span>
           )}
+          <div className="flex-1" />
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleSave}
+            title={t("common.save") || "保存"}
+          >
+            <Save className="size-4" />
+            <span className="hidden sm:inline ml-1.5">
+              {t("common.save") || "保存"}
+            </span>
+          </Button>
         </div>
         {filePreview ? (
           <div className="flex-1 flex flex-col min-h-0">
