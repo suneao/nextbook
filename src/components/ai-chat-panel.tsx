@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,6 +38,32 @@ export function AIChatPanel({
   const [files, setFiles] = useState<AttachedFile[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [panelWidth, setPanelWidth] = useState(380);
+  const dragState = useRef({ startX: 0, startW: 0 });
+  const onDragMoveRef = useRef<(e: MouseEvent) => void>(() => {});
+  const onDragEndRef = useRef<() => void>(() => {});
+
+  onDragMoveRef.current = (e: MouseEvent) => {
+    const delta = dragState.current.startX - e.clientX;
+    setPanelWidth(
+      Math.max(280, Math.min(800, dragState.current.startW + delta)),
+    );
+  };
+
+  onDragEndRef.current = () => {
+    document.removeEventListener("mousemove", onDragMoveRef.current);
+    document.removeEventListener("mouseup", onDragEndRef.current);
+  };
+
+  const onDragStart = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      dragState.current = { startX: e.clientX, startW: panelWidth };
+      document.addEventListener("mousemove", onDragMoveRef.current);
+      document.addEventListener("mouseup", onDragEndRef.current);
+    },
+    [panelWidth],
+  );
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -174,14 +200,22 @@ export function AIChatPanel({
   return (
     <div
       className={cn(
-        "border-l bg-card/60 backdrop-blur-md transition-all duration-300 flex flex-col",
+        "border-l bg-card/60 backdrop-blur-md transition-all duration-300 flex flex-col relative",
         "max-md:fixed max-md:z-50 max-md:bottom-16 max-md:left-0 max-md:right-0 max-md:rounded-t-2xl max-md:shadow-2xl max-md:border max-md:border-border/50",
         "md:sticky md:top-14 md:h-[calc(100vh-3.5rem)]",
         open
-          ? "max-md:h-[50vh] md:w-[380px]"
+          ? "max-md:h-[50vh]"
           : "max-md:h-0 max-md:overflow-hidden max-md:border-0 max-md:opacity-0 max-md:pointer-events-none md:w-0 md:overflow-hidden md:border-l-0",
       )}
+      style={open ? { width: panelWidth } : undefined}
     >
+      {/* Drag handle */}
+      {open && (
+        <div
+          className="absolute -left-1 top-0 w-2 h-full cursor-col-resize hover:bg-primary/30 active:bg-primary/50 z-20 hidden md:block"
+          onMouseDown={onDragStart}
+        />
+      )}
       <div className="shrink-0 px-4 py-3 border-b">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold flex items-center gap-2">

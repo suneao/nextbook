@@ -48,8 +48,8 @@ export function Markdown({
       table: ({ children, ...props }) => (
         <div className="my-2 overflow-x-auto">
           <table
-            className="w-full border-collapse border rounded-lg"
             {...props}
+            className="w-full border-collapse border rounded-lg"
           >
             {children}
           </table>
@@ -57,14 +57,14 @@ export function Markdown({
       ),
       th: ({ children, ...props }) => (
         <th
-          className="border px-3 py-1.5 text-xs font-semibold bg-muted"
           {...props}
+          className="border px-3 py-1.5 text-xs font-semibold bg-muted"
         >
           {children}
         </th>
       ),
       td: ({ children, ...props }) => (
-        <td className="border px-3 py-1.5 text-xs" {...props}>
+        <td {...props} className="border px-3 py-1.5 text-xs">
           {children}
         </td>
       ),
