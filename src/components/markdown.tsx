@@ -106,7 +106,9 @@ export function Markdown({
   );
 
   const rendered = useMemo(() => {
-    let text = content;
+    // AI double-escapes LaTeX backslashes (e.g. \\frac instead of \frac).
+    // Collapse them back so KaTeX can render correctly.
+    let text = content.replace(/\\\\/g, "\\");
     // Convert literal \n and \r to actual newlines (outside LaTeX commands)
     text = text
       .replace(/\\n(?![a-zA-Z])/g, "\n")
