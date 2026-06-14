@@ -40,27 +40,26 @@ export function AIChatPanel({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [panelWidth, setPanelWidth] = useState(380);
   const dragState = useRef({ startX: 0, startW: 0 });
-  const onDragMoveRef = useRef<(e: MouseEvent) => void>(() => {});
-  const onDragEndRef = useRef<() => void>(() => {});
-
-  onDragMoveRef.current = (e: MouseEvent) => {
-    const delta = dragState.current.startX - e.clientX;
-    setPanelWidth(
-      Math.max(280, Math.min(800, dragState.current.startW + delta)),
-    );
-  };
-
-  onDragEndRef.current = () => {
-    document.removeEventListener("mousemove", onDragMoveRef.current);
-    document.removeEventListener("mouseup", onDragEndRef.current);
-  };
 
   const onDragStart = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
       dragState.current = { startX: e.clientX, startW: panelWidth };
-      document.addEventListener("mousemove", onDragMoveRef.current);
-      document.addEventListener("mouseup", onDragEndRef.current);
+
+      const onMove = (ev: MouseEvent) => {
+        const delta = dragState.current.startX - ev.clientX;
+        setPanelWidth(
+          Math.max(280, Math.min(800, dragState.current.startW + delta)),
+        );
+      };
+
+      const onEnd = () => {
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onEnd);
+      };
+
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onEnd);
     },
     [panelWidth],
   );
