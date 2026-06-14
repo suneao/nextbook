@@ -106,9 +106,11 @@ export function Markdown({
   );
 
   const rendered = useMemo(() => {
-    // AI double-escapes LaTeX backslashes (e.g. \\frac instead of \frac).
-    // Collapse them back so KaTeX can render correctly.
-    let text = content.replace(/\\\\/g, "\\");
+    // AI knowledge extraction double-escapes LaTeX backslashes (\\frac, \\begin).
+    // AI chat uses normal single backslashes (\frac, \begin).
+    // Detect double-escaped content by looking for \\ followed by a letter.
+    const isDoubleEscaped = /\\\\[a-zA-Z]/.test(content);
+    let text = isDoubleEscaped ? content.replace(/\\\\/g, "\\") : content;
     // Convert literal \n and \r to actual newlines (outside LaTeX commands)
     text = text
       .replace(/\\n(?![a-zA-Z])/g, "\n")
